@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" style="color-scheme: dark; background: #060b14">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#060B14" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="ASTRA-MED: an offline-first astronaut health monitoring console. NASA Space Apps Challenge 2026 prototype with synthetic demonstration data."
+    />
+    <title>ASTRA-MED — Crew Health Console</title>
+    <style>
+      #boot { position: fixed; inset: 0; display: grid; place-items: center; background: #060b14; color: #91a4ba;
+        font: 500 13px/1.4 ui-sans-serif, system-ui, sans-serif; letter-spacing: 0.08em; }
+      #boot svg { display: block; margin: 0 auto 12px; }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div id="boot" role="status" aria-live="polite">
+        <div>
+          <svg width="36" height="36" viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="13" fill="none" stroke="#1d344b" stroke-width="2"/><path d="M16 6v20M6 16h20" stroke="#42d9f5" stroke-width="2" stroke-linecap="round"/></svg>
+          Loading ASTRA-MED console…
+        </div>
+      </div>
+    </div>
+    <noscript>ASTRA-MED needs JavaScript to run the local health console.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

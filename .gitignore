@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.env.local
+.env.*.local
+._*
+.DS_Store
+*.log
+# Third-party agent skills are installed locally (see skills-lock.json); some licenses forbid redistribution.
+.claude/skills/

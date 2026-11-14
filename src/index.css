@@ -1,0 +1,327 @@
+@import "@fontsource/barlow/400.css";
+@import "@fontsource/barlow/500.css";
+@import "@fontsource/barlow/600.css";
+@import "@fontsource/barlow/700.css";
+@import "@fontsource/barlow-semi-condensed/500.css";
+@import "@fontsource/barlow-semi-condensed/600.css";
+@import "@fontsource/barlow-semi-condensed/700.css";
+@import "@fontsource/ibm-plex-mono/400.css";
+@import "@fontsource/ibm-plex-mono/500.css";
+@import "@fontsource/ibm-plex-mono/600.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* transitions.dev motion tokens (see .claude/skills/transitions-polish) */
+:root {
+  --duration-stagger: 40ms;
+  --duration-micro: 80ms;
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-medium: 350ms;
+  --duration-slow: 400ms;
+  --duration-very-slow: 500ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: ease-in-out;
+  --ease-out: ease-out;
+  --ease-linear: linear;
+  --distance-micro: 4px;
+  --distance-base: 8px;
+  --distance-medium: 12px;
+  --scale-large: 0.96;
+  --scale-small: 0.98;
+  --blur-small: 2px;
+
+  --c-space: #060b14;
+  --c-panel: #0d1526;
+  --c-raised: #111d31;
+  --c-line: #1d344b;
+  --c-cyan: #42d9f5;
+
+  --rail-w: 76px;
+  --topbar-h: 56px;
+  --sticky-offset: 104px;
+  color-scheme: dark;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --sticky-offset: 168px;
+  }
+}
+
+@layer base {
+  html {
+    background: theme("colors.space");
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-space font-sans text-base text-ink antialiased;
+    font-feature-settings: "kern", "liga";
+    -webkit-tap-highlight-color: transparent;
+    min-height: 100dvh;
+  }
+  ::selection {
+    background: rgba(66, 217, 245, 0.28);
+    color: #fff;
+  }
+  :focus-visible {
+    outline: 2px solid theme("colors.cyan.DEFAULT");
+    outline-offset: 2px;
+    border-radius: 3px;
+  }
+  button,
+  [role="button"],
+  a,
+  input,
+  select,
+  label {
+    touch-action: manipulation;
+  }
+  select {
+    background-color: theme("colors.raised");
+    color: theme("colors.ink.DEFAULT");
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+  * {
+    scrollbar-color: #2a4a68 transparent;
+    scrollbar-width: thin;
+  }
+  input[type="number"]::-webkit-inner-spin-button {
+    opacity: 0.4;
+  }
+}
+
+@layer components {
+  .num {
+    font-family: theme("fontFamily.mono");
+    font-variant-numeric: tabular-nums slashed-zero;
+    font-feature-settings: "tnum", "zero";
+  }
+  /* Instrument label: condensed caps, used only where PROMPT.md §21 specifies console copy. */
+  .label {
+    font-family: theme("fontFamily.cond");
+    font-weight: 600;
+    font-size: 12px;
+    line-height: 16px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: theme("colors.ink.2");
+  }
+  .panel {
+    @apply rounded-panel border border-line bg-panel;
+  }
+  .btn {
+    @apply inline-flex min-h-[36px] items-center justify-center gap-2 rounded-control border px-3 font-cond text-sm font-semibold;
+    transition:
+      background-color var(--duration-quick) var(--ease-out),
+      border-color var(--duration-quick) var(--ease-out),
+      color var(--duration-quick) var(--ease-out),
+      transform var(--duration-quick) var(--ease-out);
+  }
+  .btn:active:not(:disabled) {
+    transform: translateY(1px);
+  }
+  .btn:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+  .btn-primary {
+    @apply border-cyan bg-cyan text-space hover:bg-[#6fe3f8];
+  }
+  .btn-secondary {
+    @apply border-line-strong bg-raised text-ink hover:border-cyan/60 hover:bg-[#15243b];
+  }
+  .btn-ghost {
+    @apply border-transparent bg-transparent text-ink-2 hover:bg-raised hover:text-ink;
+  }
+  .btn-danger {
+    @apply border-critical/60 bg-critical/10 text-[#ff8aa0] hover:bg-critical/20;
+  }
+  .field {
+    @apply w-full rounded-control border border-line-strong bg-raised px-3 py-2 text-md text-ink placeholder:text-ink-3;
+    transition: border-color var(--duration-quick) var(--ease-out);
+  }
+  .field:hover {
+    @apply border-[#36597b];
+  }
+  .field:focus-visible {
+    outline-offset: 0;
+    @apply border-cyan;
+  }
+  .field[aria-invalid="true"] {
+    @apply border-critical;
+  }
+  .link {
+    @apply text-cyan underline decoration-cyan/40 underline-offset-[3px] hover:decoration-cyan;
+  }
+  .chip-tag {
+    @apply inline-flex items-center gap-1 rounded-badge border px-1.5 py-px font-cond text-2xs font-semibold uppercase tracking-label;
+  }
+}
+
+/* Mission track range input sits invisibly over the status ticks. */
+.track-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+.track-range::-webkit-slider-runnable-track {
+  height: 100%;
+  background: transparent;
+}
+.track-range::-moz-range-track {
+  height: 100%;
+  background: transparent;
+}
+.track-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 100%;
+  background: transparent;
+  border: 0;
+}
+.track-range::-moz-range-thumb {
+  width: 14px;
+  height: 100%;
+  background: transparent;
+  border: 0;
+}
+.track-range:focus-visible {
+  outline: none;
+}
+.track-wrap:has(.track-range:focus-visible) .track-cursor {
+  outline: 2px solid theme("colors.cyan.DEFAULT");
+  outline-offset: 2px;
+}
+
+/* Dialogs */
+dialog {
+  color: inherit;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  max-width: none;
+  max-height: none;
+}
+dialog::backdrop {
+  background: rgba(3, 7, 14, 0.72);
+}
+dialog[open].t-modal {
+  animation: t-modal-in var(--duration-fast) var(--ease-smooth-out);
+}
+dialog[open].t-drawer {
+  animation: t-drawer-in var(--duration-slow) var(--ease-smooth-out);
+}
+@keyframes t-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(var(--scale-large));
+  }
+}
+@keyframes t-drawer-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+@media (max-width: 767px) {
+  @keyframes t-drawer-in {
+    from {
+      opacity: 0;
+      transform: translateY(24px);
+    }
+  }
+}
+
+/* Toasts */
+.t-toast {
+  animation: t-toast-in var(--duration-slow) var(--ease-smooth-out);
+}
+@keyframes t-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--distance-medium));
+    filter: blur(var(--blur-small));
+  }
+}
+
+/* Value change: quiet cross-fade when a telemetry readout updates. */
+.t-value {
+  animation: t-value-in var(--duration-fast) var(--ease-in-out);
+}
+@keyframes t-value-in {
+  from {
+    opacity: 0.35;
+    transform: translateY(calc(var(--distance-micro) * -0.5));
+  }
+}
+
+/* Body plate: the one orchestrated load moment. */
+.plate-contour {
+  stroke-dasharray: 2400;
+  stroke-dashoffset: 0;
+  animation: plate-draw 1400ms var(--ease-smooth-out) both;
+}
+.plate-scan {
+  animation: plate-fade 900ms var(--ease-out) 500ms both;
+}
+@keyframes plate-draw {
+  from {
+    stroke-dashoffset: 2400;
+  }
+}
+@keyframes plate-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+.hotspot-region {
+  transition:
+    fill-opacity var(--duration-fast) var(--ease-out),
+    stroke-opacity var(--duration-fast) var(--ease-out);
+}
+.hotspot:hover .hotspot-region,
+.hotspot:focus-visible .hotspot-region {
+  fill-opacity: 0.22;
+  stroke-opacity: 0.9;
+}
+.hotspot:focus-visible {
+  outline: none;
+}
+.hotspot:focus-visible .hotspot-ring {
+  stroke: theme("colors.cyan.DEFAULT");
+  stroke-width: 2.5;
+}
+
+/* Checkbox check (transitions.dev 25, simplified) */
+.t-check path {
+  stroke-dasharray: 16;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset var(--duration-fast) var(--ease-smooth-out) 60ms;
+}
+.t-check[data-checked="false"] path {
+  stroke-dashoffset: 16;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+  }
+}
