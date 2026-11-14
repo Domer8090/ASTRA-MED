@@ -278,3 +278,21 @@ export function describeThresholds(aredTarget: number, hydrationTarget: number):
     },
   ];
 }
+
+/**
+ * Trend watch: an early-warning projection for indicators that are still
+ * NOMINAL. A least-squares line through the last `windowDays` readings is
+ * extended forward; if it reaches a caution limit within `horizonDays` and
+ * the fit is good enough, the console shows TREND WATCH. It never changes a
+ * health status. All values here are ASTRA assumptions.
+ */
+export const TREND_WATCH = {
+  windowDays: 7,
+  minReadings: 5,
+  horizonDays: 7,
+  /** Minimum R² of the fitted line; noisier series are ignored. */
+  minFit: 0.5,
+  /** Sleep has no band between reference and caution, so watch starts below this. */
+  sleepWatchBelow: 6.5,
+  provenance: "astra-assumption" as ThresholdProvenance,
+} as const;

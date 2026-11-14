@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { AppShell } from "./components/AppShell";
+import { CmeForecastProvider } from "./hooks/useCmeForecast";
 import { MissionModelProvider } from "./hooks/useMissionModel";
+import { OnboardingProvider } from "./hooks/useOnboarding";
 import { MissionStoreContext } from "./hooks/useMissionState";
 import { SpaceWeatherProvider } from "./hooks/useSpaceWeather";
 import { ToastProvider } from "./hooks/useToast";
@@ -25,11 +27,15 @@ export default function App({ store }: { store: MissionStore }) {
     <MissionStoreContext.Provider value={store}>
       <ToastProvider>
         <SpaceWeatherProvider>
-          <UiProvider>
-            <MissionModelProvider>
-              <AppShell />
-            </MissionModelProvider>
-          </UiProvider>
+          <CmeForecastProvider>
+            <UiProvider>
+              <OnboardingProvider>
+                <MissionModelProvider>
+                  <AppShell />
+                </MissionModelProvider>
+              </OnboardingProvider>
+            </UiProvider>
+          </CmeForecastProvider>
         </SpaceWeatherProvider>
       </ToastProvider>
     </MissionStoreContext.Provider>

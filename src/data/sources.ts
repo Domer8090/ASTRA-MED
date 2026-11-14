@@ -14,6 +14,21 @@ export interface SourceEntry {
 
 export const REFERENCE_SOURCES: SourceEntry[] = [
   {
+    title: "DONKI WSA-ENLIL Simulations",
+    url: "https://ccmc.gsfc.nasa.gov/tools/DONKI/",
+    publisher: "NASA Community Coordinated Modeling Center (CCMC)",
+    description:
+      "DONKI catalogues CCMC's WSA-ENLIL heliospheric model runs for coronal mass ejections. Each run lists predicted arrival times at Earth and at planets and spacecraft, including Mars.",
+    usedFor: "The Earth and Mars CME arrival forecast in the space-weather monitor and the CME notice in the status band. Forecast only; never a dose or a health status.",
+  },
+  {
+    title: "Approximate Positions of the Planets (Keplerian elements)",
+    url: "https://ssd.jpl.nasa.gov/planets/approx_pos.html",
+    publisher: "NASA JPL Solar System Dynamics (E. M. Standish)",
+    description: "Keplerian elements and rates for approximate planet positions, valid 1800–2050.",
+    usedFor: "Earth–Mars distance and one-way signal delay on today's date, computed in the browser.",
+  },
+  {
     title: "Spaceflight Standard Measures",
     url: "https://nlsp.nasa.gov/resources/standard-measures",
     publisher: "NASA Human Research Program, NASA Life Sciences Portal",

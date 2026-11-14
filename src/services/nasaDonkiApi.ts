@@ -247,7 +247,7 @@ class HttpError extends Error {
   }
 }
 
-async function fetchJson(fetchImpl: FetchLike, url: string, timeoutMs: number): Promise<{ json: unknown; status: number }> {
+export async function fetchJson(fetchImpl: FetchLike, url: string, timeoutMs: number): Promise<{ json: unknown; status: number }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {

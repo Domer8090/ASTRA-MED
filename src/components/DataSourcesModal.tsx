@@ -1,11 +1,14 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
-import { DatabaseZap, ExternalLink, HardDrive, RotateCcw, ShieldCheck } from "lucide-react";
+import { Compass, DatabaseZap, ExternalLink, HardDrive, RotateCcw, ShieldCheck } from "lucide-react";
 import { ARED, describeThresholds, HYDRATION, MISSION } from "../config/thresholds";
 import { ARCHIVE_PROVENANCE } from "../data/fallbackDonki";
 import { SEP_DOSE_MODEL_SUMMARY } from "../data/scenarioHazards";
 import { LIMITATIONS_STATEMENT, OSDR_STUDIES, REFERENCE_SOURCES } from "../data/sources";
 import { useMissionState, useMissionStore } from "../hooks/useMissionState";
 import { useToast } from "../hooks/useToast";
+import { useOnboarding } from "../hooks/useOnboarding";
+import { earthMarsLightMinutes } from "../engine/lightTime";
+import { formatNumber } from "../utils/formatting";
 import { useUiActions, useUiState, type SourcesTab } from "../hooks/useUi";
 import { usingDemoKey } from "../services/nasaDonkiApi";
 import type { ThresholdProvenance } from "../types/health";
@@ -27,7 +30,8 @@ const PROV_TAG: Record<ThresholdProvenance, Provenance> = {
 };
 
 function About() {
-  const { openSources } = useUiActions();
+  const { openSources, closeSources } = useUiActions();
+  const { startTour } = useOnboarding();
   const steps = [
     {
       title: "Sense and log",
@@ -45,9 +49,25 @@ function About() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="font-cond text-xl font-bold text-ink">ASTRA-MED: Crew Health. Mission Ready.</h3>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h3 className="font-cond text-xl font-bold text-ink">ASTRA-MED: Crew Health. Mission Ready.</h3>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => {
+              closeSources();
+              startTour();
+            }}
+          >
+            <Compass aria-hidden="true" className="h-4 w-4" />
+            Take the 1-minute tour
+          </button>
+        </div>
         <p className="mt-2 max-w-[70ch] text-base text-ink">
-          <span className="font-semibold">The problem.</span> Between Mars and Earth a radio signal takes about 3 to 22 minutes each way, so a question to the flight surgeon and its answer can take most of an hour. Deep-space crews need to triage routine health questions on board, without waiting for the ground.
+          <span className="font-semibold">The problem.</span> Between Mars and Earth a radio signal takes about 3 to 22 minutes each way, so a question to the flight surgeon and its answer can take most of an hour. Deep-space crews need to triage routine health questions on board, without waiting for the ground.{" "}
+          <span className="text-ink-2">
+            On today&apos;s real date the one-way delay is <span className="num text-ink">{formatNumber(earthMarsLightMinutes(new Date()), 1)}</span> minutes (NASA JPL approximate planetary positions).
+          </span>
         </p>
       </div>
 
@@ -99,6 +119,14 @@ function About() {
           <li className="rounded-tile border border-line p-3">
             <span className="font-semibold text-ink">Live: NASA DONKI space weather.</span>{" "}
             <span className="text-ink-2">Flares, solar energetic particle events, CMEs and notifications from the CCMC DONKI API and api.nasa.gov, labelled LIVE only after a successful request in this session. Environmental context; never a personal dose.</span>
+          </li>
+          <li className="rounded-tile border border-line p-3">
+            <span className="font-semibold text-ink">Forecast: NASA WSA-ENLIL CME arrivals.</span>{" "}
+            <span className="text-ink-2">Model-predicted arrival times of coronal mass ejections at Mars and Earth, from CCMC model runs published in DONKI. Mars stands in for the Ares transit. Shown as a forecast, never as a dose.</span>
+          </li>
+          <li className="rounded-tile border border-line p-3">
+            <span className="font-semibold text-ink">Computed: Earth–Mars signal delay.</span>{" "}
+            <span className="text-ink-2">From the NASA JPL Keplerian elements for approximate planet positions, computed in the browser with no network.</span>
           </li>
           <li className="rounded-tile border border-line p-3">
             <span className="font-semibold text-ink">Reference: NASA Human Research Program.</span>{" "}

@@ -11,6 +11,7 @@ import { ProvenanceTag } from "../shared/ProvenanceTag";
 import { BasisLine } from "../shared/BasisLine";
 import { FollowUpCard } from "../shared/FollowUpCard";
 import { StatusBadge } from "../shared/StatusBadge";
+import { TrendChip } from "../shared/TrendChip";
 import { useConsoleFocus, useSelectedSystem } from "./useConsoleFocus";
 
 function CheckMark({ checked }: { checked: boolean }) {
@@ -25,7 +26,7 @@ function CheckMark({ checked }: { checked: boolean }) {
 
 /** Diagnosis, observations, countermeasures and self-check for the selected body system. */
 export function SystemIntelPanel() {
-  const { systems, diagnostics, tasks, followUps, day } = useMissionModel();
+  const { systems, diagnostics, tasks, followUps, day, trends } = useMissionModel();
   const { system: selectedSystem, mode, priority } = useSelectedSystem();
   const { selectedMetric } = useUiState();
   const { openGuidance, openLog, followPriority } = useUiActions();
@@ -46,7 +47,7 @@ export function SystemIntelPanel() {
   const frame = st.status === "CRITICAL" ? "border-critical/60" : st.status === "CAUTION" ? "border-caution/55" : "border-line";
 
   return (
-    <section id="intel" aria-labelledby="intel-title" aria-live="polite" className={`panel flex min-w-0 flex-col border ${frame}`}>
+    <section id="intel" data-tour="intel" aria-labelledby="intel-title" aria-live="polite" className={`panel flex min-w-0 flex-col border ${frame}`}>
       <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0">
           <p className="label">System status</p>
@@ -105,15 +106,28 @@ export function SystemIntelPanel() {
             <dt className="font-cond text-2xs font-semibold uppercase tracking-label text-ink-3">What changed</dt>
             <dd className="text-ink">{focus.summary}</dd>
           </div>
-          <div>
-            <dt className="font-cond text-2xs font-semibold uppercase tracking-label text-ink-3">Why it matters in microgravity</dt>
-            <dd className="text-ink-2">{focus.explanation}</dd>
-          </div>
+          {trends
+            .filter((t) => t.metricId === focus.metricId)
+            .map((t) => (
+              <div key={`${t.metricId}-${t.part ?? ""}`} className="rounded-tile border border-cyan/40 px-3 py-2">
+                <dt>
+                  <TrendChip />
+                </dt>
+                <dd className="mt-1 text-ink">{t.text}</dd>
+              </div>
+            ))}
           <div className="rounded-tile border border-line-strong bg-raised px-3 py-2">
             <dt className="font-cond text-2xs font-semibold uppercase tracking-label text-cyan">Recommended next step</dt>
             <dd className="mt-0.5 text-ink">{focus.recommendedNextStep}</dd>
           </div>
         </dl>
+        <details className="group mt-2 text-sm">
+          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-ink-2 [&::-webkit-details-marker]:hidden">
+            <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 -rotate-90 transition-transform duration-150 group-open:rotate-0" />
+            Why it matters in microgravity
+          </summary>
+          <p className="mt-1 text-ink-2">{focus.explanation}</p>
+        </details>
         <BasisLine basis={focus.basis} />
       </div>
 

@@ -13,6 +13,7 @@ import { NavRail } from "./NavRail";
 import { DeepLinks } from "./DeepLinks";
 import { PanelBoundary } from "./shared/ErrorBoundary";
 import { SpaceWeatherPanel } from "./SpaceWeatherPanel";
+import { SpotlightTour } from "./SpotlightTour";
 import { TopTelemetryBar } from "./TopTelemetryBar";
 
 function SystemNotices() {
@@ -90,6 +91,7 @@ export function AppShell() {
       <GuidanceDrawer />
       <MeasurementForm />
       <DataSourcesModal />
+      <SpotlightTour />
     </div>
   );
 }

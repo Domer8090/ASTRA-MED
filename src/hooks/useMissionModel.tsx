@@ -6,6 +6,7 @@ import { evaluateBodySystems } from "../engine/bodySystemEngine";
 import { aggregateStatus, evaluateAllMetrics, evaluateMissionDays, type EngineInput } from "../engine/diagnosticEngine";
 import { buildFollowUps, mostImportantAction, type PrimaryAction } from "../engine/protocolEngine";
 import { computeReadiness, tasksForDay, type ReadinessInput } from "../engine/readinessEngine";
+import { trendWatch, type TrendWatch } from "../engine/trendEngine";
 import { buildEffectiveDays } from "../services/telemetryService";
 import type {
   BodySystemId,
@@ -48,6 +49,8 @@ export interface MissionModel {
   primaryAction: PrimaryAction;
   lastReading: MetricReading | null;
   readinessInput: ReadinessInput;
+  /** Early-warning projections for NOMINAL indicators. Never a status. */
+  trends: TrendWatch[];
 }
 
 const MissionModelContext = createContext<MissionModel | null>(null);
@@ -100,6 +103,7 @@ export function MissionModelProvider({ children }: { children: ReactNode }) {
     () => computeReadiness(readinessInput, day, followUps, diagnostics),
     [readinessInput, day, followUps, diagnostics],
   );
+  const trends = useMemo(() => trendWatch(days, day, diagnostics), [days, day, diagnostics]);
   const primaryAction = useMemo(() => mostImportantAction(followUps, tasks, day), [followUps, tasks, day]);
 
   const lastReading = useMemo(() => {
@@ -133,8 +137,9 @@ export function MissionModelProvider({ children }: { children: ReactNode }) {
       primaryAction,
       lastReading,
       readinessInput,
+      trends,
     }),
-    [settings, day, scenarioId, measurements, days, engineInput, missionDays, diagnostics, overall, advisories, systems, taskDefinitions, tasks, followUps, readiness, primaryAction, lastReading, readinessInput],
+    [settings, day, scenarioId, measurements, days, engineInput, missionDays, diagnostics, overall, advisories, systems, taskDefinitions, tasks, followUps, readiness, primaryAction, lastReading, readinessInput, trends],
   );
 
   return <MissionModelContext.Provider value={value}>{children}</MissionModelContext.Provider>;

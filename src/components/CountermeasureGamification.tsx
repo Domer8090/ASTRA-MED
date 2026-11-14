@@ -47,7 +47,7 @@ function TaskRow({ task, day }: { task: CountermeasureTask; day: number }) {
   };
 
   return (
-    <li className="flex items-start gap-3 py-3">
+    <li className="flex items-center gap-3 py-2">
       <button
         type="button"
         role="checkbox"
@@ -56,22 +56,22 @@ function TaskRow({ task, day }: { task: CountermeasureTask; day: number }) {
         className="-m-2 flex min-h-[44px] flex-1 items-start gap-3 rounded-tile p-2 text-left hover:bg-raised/60"
       >
         <CheckBox checked={task.completed} />
-        <span className="min-w-0 flex-1">
+        <span className="min-w-0 flex-1" title={task.description}>
           <span className={`block text-base font-semibold ${task.completed ? "text-ink-2" : "text-ink"}`}>{task.title}</span>
-          <span className="mt-0.5 block text-sm text-ink-2">{task.description}</span>
-          <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-ink-3">
-            <span>Target: {task.targetLabel}</span>
-            {task.completed && task.via ? (
-              <span>
-                {VIA_LABEL[task.via]}
-                {task.completedAt ? `, marked ${formatLocalDateTime(task.completedAt)} (real time)` : ""}
+          <span className="mt-0.5 block text-sm text-ink-2">
+            {task.targetLabel}
+            {task.completed && task.via && task.via !== "seed" ? (
+              <span className="text-ink-3">
+                {" "}
+                ({VIA_LABEL[task.via].toLowerCase()}
+                {task.completedAt ? `, ${formatLocalDateTime(task.completedAt)}` : ""})
               </span>
             ) : null}
           </span>
         </span>
         <span className={`num shrink-0 text-sm font-medium ${task.completed ? "text-nominal" : "text-ink-2"}`}>+{task.xp}&nbsp;XP</span>
       </button>
-      <div className="flex shrink-0 flex-col gap-1">
+      <div className="flex shrink-0 items-center gap-1">
         {task.linkedMetric ? (
           <button type="button" className="btn btn-ghost min-h-[32px] px-2 text-xs" onClick={() => openLog({ metricId: task.linkedMetric!, day })} aria-label={`Log measurement for ${task.title}`}>
             <Plus aria-hidden="true" className="h-3.5 w-3.5" />
@@ -140,7 +140,6 @@ export function CountermeasureGamification() {
       <p className="mt-2 text-sm text-ink-2" aria-live="polite">
         {readiness.message}
       </p>
-      <p className="mt-0.5 text-2xs text-ink-3">XP, streak and completion include synthetic adherence history for earlier days, plus anything you mark.</p>
       <details className="group mt-2 rounded-tile border border-line">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm [&::-webkit-details-marker]:hidden">
           <span>
@@ -162,7 +161,7 @@ export function CountermeasureGamification() {
         ))}
       </ul>
       <p className="mt-1 text-2xs text-ink-3">
-        A day counts toward the streak when at least {Math.round(COUNTERMEASURES.streakMinCompletion * 100)}% of its tasks are complete (ASTRA assumption). Days before the scenario day carry synthetic adherence history.
+        Earlier days use synthetic adherence history. A day counts toward the streak at {Math.round(COUNTERMEASURES.streakMinCompletion * 100)}% complete (ASTRA assumption).
       </p>
 
       <div className="mt-5 border-t border-line pt-4">

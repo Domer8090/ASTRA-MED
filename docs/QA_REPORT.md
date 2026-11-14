@@ -147,3 +147,14 @@ Not checked in real Chrome: the window would not shrink below desktop width, so 
 | C. Readiness | The engine returns the four weighted parts (50 / 20 / 15 / 15). The top-bar score opens a breakdown that labels it an engagement indicator, not a medical clearance. The countermeasures panel explains how the score relates to today's completion. | Day 180: 41.7 + 19.1 + 15 + 15 = 91. New unit test checks weights and sum. |
 | D. Space weather | Hazard assessment and protective sequence come first, then the hazard-not-dose note. The per-type feed table, filters and raw DONKI records sit in a collapsed "NASA DONKI event records" section with a one-line summary. | 133 records and 4 type rows inside the section. |
 | E. Demo data | A persistent DEMO DATA chip in the top bar (mobile and desktop) opens the Overview, which now starts with "What is simulated and what is real". | Chip visible at 375 px and 1280 px. |
+
+## 9. Onboarding, simplification and NASA foresight (2026-11-14)
+
+| Change | Verified |
+| --- | --- |
+| First visit opens the Overview. Closing it stores `astra-med:v1:onboarding` and starts an 8-step spotlight tour (Next, Back, Skip, Esc, arrow keys, focus kept in the card). The tour can be replayed from the Overview. Deep links with a hash skip the automatic Overview. | Fresh storage at 1280 px: Overview opened, X started the tour, all 8 steps found their targets, record saved; reload did not reopen it. At 375 px the card docks above the bottom bar with no horizontal overflow. |
+| Navigation highlights every section in the reading area, so Tasks and Alerts light up together when side by side. | Scrolled to Countermeasures at 1280 px: Tasks and Alerts both current. |
+| Simplified: task rows show title and target on one line with Log and Guide side by side; "Synthetic history" per row removed (the DEMO DATA chip covers it); basis lines collapse behind "Why this step?"; "Why it matters in microgravity" collapses. | Visual check at 1280 px. |
+| Trend watch (`src/engine/trendEngine.ts`): a 7-day least-squares projection for NOMINAL indicators that have left their reference band. Shown when the line reaches a caution limit within 7 days with R² ≥ 0.5. Never changes a status. ASTRA assumption. | Scenario B flags heart rate from day 104, eight days before CAUTION on day 112. Nominal day 42 is quiet. Unit tests. |
+| Earth and Mars CME forecast from NASA CCMC WSA-ENLIL runs in DONKI (`WSAEnlilSimulations`, CORS open), cached as `astra-med:v1:enlil-cache`, labelled LIVE / CACHED / NOT LOADED. A Mars arrival within 72 h also appears in the status band. | Live fetch from ccmc.gsfc.nasa.gov; parsing, de-duplication and cache sanitising unit-tested. |
+| Earth–Mars one-way signal delay from JPL approximate Keplerian elements, shown in the status band and the Overview. | 2025-01-12 gives 0.642 AU (published close approach 0.642 AU); 2027-02-19 gives 0.678 AU. |

@@ -1,4 +1,4 @@
-import { BookOpenCheck, Clock3, Radiation } from "lucide-react";
+import { BookOpenCheck, Clock3, Radiation, RadioTower, Sun } from "lucide-react";
 import { STATUS_TEXT_CLASS } from "../../config/theme";
 import { BODY_SYSTEMS } from "../../data/bodySystems";
 import { METRIC_GUIDANCE } from "../../data/metricGuidance";
@@ -6,8 +6,14 @@ import { useMissionModel } from "../../hooks/useMissionModel";
 import { useUiActions } from "../../hooks/useUi";
 import { useMissionStore } from "../../hooks/useMissionState";
 import type { HealthStatus } from "../../types/health";
-import { formatMetStamp, formatReadingStamp, padDay } from "../../utils/dates";
-import { capitalize } from "../../utils/formatting";
+import { formatMetStamp, formatReadingStamp, formatRelative, padDay } from "../../utils/dates";
+import { capitalize, formatNumber } from "../../utils/formatting";
+import { earthMarsLightMinutes } from "../../engine/lightTime";
+import { useCmeForecast } from "../../hooks/useCmeForecast";
+import { useNow } from "../../hooks/useNow";
+import { nextArrival } from "../../services/enlilForecast";
+import { scrollToSection } from "../navigation";
+import { TrendChip } from "../shared/TrendChip";
 import { BasisLine } from "../shared/BasisLine";
 import { ProvenanceTag } from "../shared/ProvenanceTag";
 import { StatusBadge, StatusIcon } from "../shared/StatusBadge";
@@ -48,7 +54,9 @@ function ScenarioContext() {
         <>
           <span className="text-ink-2">
             {story
-              ? `Day ${day} is outside this scenario's event window (days ${story[0]}–${story[1]}), so readings here look like a normal day.`
+              ? day < story[0]
+                ? `Day ${day} is before this scenario's event window (days ${story[0]}–${story[1]}).`
+                : `Day ${day} is after this scenario's event window (days ${story[0]}–${story[1]}).`
               : `The demo for this scenario starts on day ${scenario.focusDay}. You are viewing day ${day}.`}
           </span>
           <button type="button" className="btn btn-primary min-h-[30px] px-2.5 text-xs" onClick={() => store.setSelectedDay(scenario.focusDay)}>
@@ -65,8 +73,43 @@ function ScenarioContext() {
  * this astronaut, and what should happen next. Status, the body system to watch
  * and the single next action lead; counts and last check stay secondary.
  */
+/** One-way Earth–Mars radio delay on today's real date. */
+function SignalDelay() {
+  const now = useNow(60_000);
+  const minutes = earthMarsLightMinutes(now);
+  return (
+    <span
+      className="flex items-center gap-1.5"
+      title="One-way radio signal time between Earth and Mars on today's real date, from NASA JPL approximate planetary positions. A question to the ground and its answer take twice this, plus crew and ground response time."
+    >
+      <RadioTower aria-hidden="true" className="h-3.5 w-3.5" />
+      <span className="label">Earth–Mars delay today</span>
+      <span className="num text-ink">{formatNumber(minutes, 1)} min</span>
+      <span className="text-ink-3">one way</span>
+    </span>
+  );
+}
+
+/** A model-predicted CME arrival at Mars within the next three days. */
+function MarsCmeNotice() {
+  const { arrivals, source } = useCmeForecast();
+  const now = useNow(60_000).getTime();
+  const next = nextArrival(arrivals, "Mars", now, 0);
+  if (!next || Date.parse(next.arrivalTime) - now > 72 * 3_600_000) return null;
+  return (
+    <a href="#weather" className="flex items-center gap-1.5 text-ink hover:text-cyan" onClick={(e) => { e.preventDefault(); scrollToSection("weather"); }}>
+      <Sun aria-hidden="true" className="h-3.5 w-3.5 text-caution" />
+      <span className="font-cond font-semibold tracking-label text-caution">CME FORECAST</span>
+      <span>
+        reaches Mars {formatRelative(next.arrivalTime, now)}
+        {next.glancingBlow ? ", glancing blow" : ""} (NASA model, {source === "live" ? "LIVE" : "CACHED"})
+      </span>
+    </a>
+  );
+}
+
 export function StatusLine() {
-  const { overall, primaryAction, lastReading, day, advisories, systems } = useMissionModel();
+  const { overall, primaryAction, lastReading, day, advisories, systems, trends } = useMissionModel();
   const { system: shown, priority } = useSelectedSystem();
   const { focusSystem } = useConsoleFocus();
   const { openGuidance, followPriority } = useUiActions();
@@ -89,7 +132,7 @@ export function StatusLine() {
   return (
     <div className="flex flex-col gap-2">
       <ScenarioContext />
-      <div className={`panel overflow-hidden border ${FRAME[overall.status]}`}>
+      <div data-tour="status" className={`panel overflow-hidden border ${FRAME[overall.status]}`}>
         <div className="grid gap-px bg-line md:grid-cols-[auto_minmax(0,1fr)] xl:grid-cols-[auto_minmax(0,1fr)_minmax(0,1.7fr)]">
           <div className="flex flex-col justify-center gap-1 bg-panel px-4 py-3">
             <p className="label">Astronaut health, day {padDay(day)}</p>
@@ -130,6 +173,16 @@ export function StatusLine() {
                     Show {BODY_SYSTEMS[priority.id].shortName.toLowerCase()} on the body map
                   </button>
                 ) : null}
+              </>
+            ) : trends[0] ? (
+              <>
+                <p className="flex flex-wrap items-center gap-2">
+                  <span className="font-cond text-lg font-bold leading-tight text-ink">{BODY_SYSTEMS[METRIC_GUIDANCE[trends[0].metricId].system].name}</span>
+                  <TrendChip />
+                </p>
+                <p className="text-sm text-ink-2">
+                  Every indicator is inside its range, but {METRIC_GUIDANCE[trends[0].metricId].name.toLowerCase()} is {trends[0].direction} toward its caution limit: about {trends[0].daysToLimit} {trends[0].daysToLimit === 1 ? "day" : "days"} at the current rate.
+                </p>
               </>
             ) : (
               <p className="text-md text-ink">All five systems are inside their configured ranges.</p>
@@ -175,6 +228,8 @@ export function StatusLine() {
               <span>none</span>
             )}
           </span>
+          <MarsCmeNotice />
+          <SignalDelay />
         </div>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import { memo, useMemo } from "react";
-import { Plus } from "lucide-react";
+import { Plus, TrendingUp } from "lucide-react";
 import { STATUS_COLOR } from "../../config/theme";
 import { BODY_SYSTEMS } from "../../data/bodySystems";
 import { METRIC_GUIDANCE } from "../../data/metricGuidance";
@@ -23,10 +23,11 @@ interface RowProps {
   inSystem: boolean;
   focused: boolean;
   dailyDose: number | undefined;
+  trending: boolean;
   onFocus: (id: MetricId) => void;
 }
 
-const VitalRow = memo(function VitalRow({ d, spark, tracks, inSystem, focused, dailyDose, onFocus }: RowProps) {
+const VitalRow = memo(function VitalRow({ d, spark, tracks, inSystem, focused, dailyDose, trending, onFocus }: RowProps) {
   const g = METRIC_GUIDANCE[d.metricId];
   const v = d.latest?.value;
   const text = v === undefined ? "—" : formatMetricValue(d.metricId, v);
@@ -51,6 +52,12 @@ const VitalRow = memo(function VitalRow({ d, spark, tracks, inSystem, focused, d
           </span>
           <span className="truncate font-cond text-sm font-semibold text-ink">{g.shortName}</span>
           {d.status !== "NOMINAL" ? <span className={`font-cond text-2xs font-bold tracking-status ${tone}`}>{d.status}</span> : <span className="sr-only">NOMINAL</span>}
+          {trending ? (
+            <span className="text-cyan" title="Trend watch: heading toward a caution limit">
+              <TrendingUp aria-hidden="true" className="h-3.5 w-3.5" />
+              <span className="sr-only">, trend watch</span>
+            </span>
+          ) : null}
         </span>
         <span className="flex items-baseline justify-end gap-1">
           <span key={text} className="t-value num text-md font-semibold text-ink">{text}</span>
@@ -64,7 +71,7 @@ const VitalRow = memo(function VitalRow({ d, spark, tracks, inSystem, focused, d
 });
 
 export function VitalsColumn() {
-  const { diagnostics, days, day, settings } = useMissionModel();
+  const { diagnostics, days, day, settings, trends } = useMissionModel();
   const { system: selectedSystem } = useSelectedSystem();
   const { selectedMetric } = useUiState();
   const { openLog } = useUiActions();
@@ -88,6 +95,7 @@ export function VitalsColumn() {
       inSystem={system.metrics.includes(m)}
       focused={selectedMetric === m}
       dailyDose={m === "radiation" ? dailyDose : undefined}
+      trending={trends.some((t) => t.metricId === m)}
       onFocus={(id) => focusMetric(id, system.metrics.includes(id) ? selectedSystem : undefined)}
     />
   );

@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, ChevronDown, ExternalLink, Radiation, RefreshCw, ShieldAlert } from "lucide-react";
+import { CheckCircle2, ChevronDown, ExternalLink, Radiation, RefreshCw, ShieldAlert, Sun } from "lucide-react";
 import { BODY_SYSTEMS } from "../data/bodySystems";
 import { METRIC_GUIDANCE } from "../data/metricGuidance";
 import { SEP_DOSE_MODEL_SUMMARY } from "../data/scenarioHazards";
+import { useCmeForecast } from "../hooks/useCmeForecast";
 import { useMissionModel } from "../hooks/useMissionModel";
+import { lastArrival, nextArrival, type CmeArrival, type ForecastLocation } from "../services/enlilForecast";
 import { useNow } from "../hooks/useNow";
 import { useSpaceWeather } from "../hooks/useSpaceWeather";
 import { useToast } from "../hooks/useToast";
@@ -153,8 +155,85 @@ function HazardAssessment({ a, day }: { a: EnvironmentAdvisory | undefined; day:
   );
 }
 
+function ArrivalCell({ location, a, last, now }: { location: ForecastLocation; a: CmeArrival | undefined; last: CmeArrival | undefined; now: number }) {
+  return (
+    <div className="bg-panel px-3 py-3">
+      <p className="label">{location === "Mars" ? "At Mars (Ares transit reference)" : "At Earth (mission control)"}</p>
+      {a ? (
+        <>
+          <p className="mt-1 flex flex-wrap items-baseline gap-x-2 text-md font-semibold text-ink">
+            <span>{formatRelative(a.arrivalTime, now)}</span>
+            <span className="num text-sm font-normal text-ink-2">{formatLocalDateTime(a.arrivalTime)}</span>
+          </p>
+          <p className="mt-0.5 text-sm text-ink-2">
+            {a.glancingBlow ? "Glancing blow predicted" : "Direct arrival predicted"}
+            {a.cmeSpeedKms ? (
+              <>
+                {", CME launched at "}
+                <span className="num">{Math.round(a.cmeSpeedKms)}</span> km/s
+              </>
+            ) : null}
+            .
+          </p>
+          {a.link ? (
+            <a href={a.link} target="_blank" rel="noopener noreferrer" className="link mt-1 inline-flex items-center gap-1 text-xs">
+              Model run {a.simulationId}
+              <ExternalLink aria-hidden="true" className="h-3 w-3" />
+            </a>
+          ) : null}
+        </>
+      ) : (
+        <>
+          <p className="mt-1 text-sm text-ink">No CME arrival predicted ahead.</p>
+          <p className="mt-0.5 text-xs text-ink-2">
+            {last ? (
+              <>
+                Last predicted arrival {formatRelative(last.arrivalTime, now)} (<span className="num">{formatLocalDateTime(last.arrivalTime)}</span>){last.glancingBlow ? ", glancing blow" : ""}.
+              </>
+            ) : (
+              "None in model runs from the last 10 days."
+            )}
+          </p>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** NASA CCMC WSA-ENLIL model forecasts of CMEs reaching Earth and Mars. */
+function CmeForecastCard() {
+  const fc = useCmeForecast();
+  const now = useNow(60_000).getTime();
+  const tag = fc.source === "live" ? { kind: "LIVE" as const, label: "LIVE" } : fc.source === "cached" ? { kind: "CACHED" as const, label: "CACHED" } : { kind: "UNAVAILABLE" as const, label: "NOT LOADED" };
+  return (
+    <div className="mt-4 rounded-tile border border-line">
+      <div className="flex flex-wrap items-start justify-between gap-2 px-3 pt-3">
+        <div>
+          <h3 className="flex items-center gap-2 font-cond text-md font-bold text-ink">
+            <Sun aria-hidden="true" className="h-4 w-4 text-caution" />
+            Solar storm forecast: Earth and Mars
+          </h3>
+          <p className="mt-0.5 max-w-[80ch] text-xs text-ink-2">
+            When the next coronal mass ejection is predicted to arrive, from NASA&apos;s WSA-ENLIL model runs in DONKI. A forecast, not an observation; arrival times are often off by half a day or more.
+          </p>
+        </div>
+        <ProvenanceTag kind={tag.kind} label={tag.label} />
+      </div>
+      <div className="mt-3 grid gap-px border-t border-line bg-line sm:grid-cols-2">
+        <ArrivalCell location="Mars" a={nextArrival(fc.arrivals, "Mars", now)} last={lastArrival(fc.arrivals, "Mars", now)} now={now} />
+        <ArrivalCell location="Earth" a={nextArrival(fc.arrivals, "Earth", now)} last={lastArrival(fc.arrivals, "Earth", now)} now={now} />
+      </div>
+      <p className="border-t border-line px-3 py-2 text-2xs text-ink-3">
+        {fc.retrievedAt ? `Retrieved ${formatRelative(fc.retrievedAt, now)}${fc.host ? ` from ${fc.host}` : ""}.` : fc.loading ? "Loading the model forecast…" : "No forecast loaded yet. It loads automatically when online."}{" "}
+        {fc.error ?? ""} The model reports planets and spacecraft, not the Ares ship, so Mars stands in for a Mars transit. Environmental context only; it never sets a dose or a health status.
+      </p>
+    </div>
+  );
+}
+
 export function SpaceWeatherPanel() {
   const wx = useSpaceWeather();
+  const forecast = useCmeForecast();
   const { advisories, day } = useMissionModel();
   const toast = useToast();
   const now = useNow(30_000).getTime();
@@ -185,6 +264,7 @@ export function SpaceWeatherPanel() {
             disabled={wx.loading || !wx.online}
             aria-describedby="wx-refresh-hint"
             onClick={async () => {
+              void forecast.refresh();
               const r = await wx.refresh();
               toast({ tone: r.ok ? "success" : "warning", title: r.ok ? "Space weather refreshed" : "Space weather not refreshed", body: r.message });
             }}
@@ -200,6 +280,8 @@ export function SpaceWeatherPanel() {
       </p>
 
       <HazardAssessment a={assessment} day={day} />
+
+      <CmeForecastCard />
 
       <div className="mt-4 flex items-start gap-3 rounded-tile border border-caution/35 px-3 py-2.5">
         <Radiation aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-caution" />

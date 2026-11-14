@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ChevronRight, ExternalLink } from "lucide-react";
 import { PROVENANCE_LABEL } from "../../engine/basis";
 import type { RecommendationBasis } from "../../types/health";
 
@@ -23,15 +23,18 @@ export function BasisLine({ basis, compact = false, inline = false }: { basis: R
       </p>
     );
   }
+  // Collapsed by default: the crew sees the step; the reasoning is one tap away.
   return (
-    <div className={`text-2xs leading-4 text-ink-3 ${compact ? "" : "mt-1.5"}`}>
-      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-        <span className="font-semibold text-ink-2">Basis:</span>
-        <span>{basis.indicator}.</span>
-        <span className="num text-ink-2">{basis.rule}</span>
+    <details className={`group text-2xs leading-4 text-ink-3 ${compact ? "" : "mt-1.5"}`}>
+      <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-1.5 gap-y-0.5 [&::-webkit-details-marker]:hidden">
+        <ChevronRight aria-hidden="true" className="h-3 w-3 transition-transform duration-150 group-open:rotate-90" />
+        <span className="font-semibold text-ink-2 underline decoration-dotted underline-offset-2">Why this step?</span>
         <span className={`chip-tag ${TONE[basis.provenance]}`}>{PROVENANCE_LABEL[basis.provenance]}</span>
+      </summary>
+      <p className="mt-1 pl-[18px]">
+        {basis.indicator}. <span className="num text-ink-2">{basis.rule}</span>
       </p>
-      <p className="mt-0.5">
+      <p className="mt-0.5 pl-[18px]">
         {basis.reference ? (
           <a href={basis.reference.url} target="_blank" rel="noopener noreferrer" className="link inline-flex items-center gap-0.5">
             {basis.reference.label}
@@ -41,6 +44,6 @@ export function BasisLine({ basis, compact = false, inline = false }: { basis: R
         {basis.reference ? " " : ""}
         {basis.referenceNote}
       </p>
-    </div>
+    </details>
   );
 }

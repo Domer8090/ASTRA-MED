@@ -75,9 +75,10 @@ await send("Runtime.enable");
 for (const [name, width, height, path, selector, mobile] of SHOTS) {
   await send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: 1, mobile: Boolean(mobile) });
   await send("Network.clearBrowserCookies").catch(() => {});
-  await send("Page.navigate", { url: "about:blank" });
-  await sleep(200);
-  await evaluate("try { localStorage.clear() } catch (e) {}");
+  // Fresh state on the app's own origin, with first-visit onboarding marked done so it does not cover the shot.
+  await send("Page.navigate", { url: `${BASE}/` });
+  await sleep(800);
+  await evaluate(`try { localStorage.clear(); localStorage.setItem("astra-med:v1:onboarding", JSON.stringify({ overviewSeen: true, tourDone: true })) } catch (e) {}`);
   await send("Page.navigate", { url: `${BASE}/${path}` });
   await sleep(4500); // render, fonts, lazy chart chunk, background DONKI fetch
   let clip;

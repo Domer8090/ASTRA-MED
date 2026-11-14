@@ -14,7 +14,7 @@ export function ScenarioSelector({ compact = false }: { compact?: boolean }) {
   const { followPriority } = useUiActions();
 
   return (
-    <div className="flex min-w-0 flex-col">
+    <div data-tour="scenario" className="flex min-w-0 flex-col">
       <label htmlFor={id} className={`label ${compact ? "sr-only" : ""}`}>
         Scenario
       </label>

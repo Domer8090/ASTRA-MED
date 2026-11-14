@@ -358,3 +358,14 @@ dialog[open].t-drawer {
     grid-template-rows: auto 1fr;
   }
 }
+
+/* Spotlight tour card: one short fade as each step appears. */
+.t-fade-in {
+  animation: t-fade-in var(--duration-fast) var(--ease-smooth-out);
+}
+@keyframes t-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}

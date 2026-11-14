@@ -4,16 +4,26 @@ import { useUiActions } from "../hooks/useUi";
 import { BrandMark } from "./BrandMark";
 import { NAV_ITEMS, scrollToSection, SOURCES_NAV, type SectionId } from "./navigation";
 
-function useActiveSection(): SectionId {
-  const [active, setActive] = useState<SectionId>("overview");
+/**
+ * Every section that occupies the reading area counts as current, so side-by-side
+ * panels (Tasks and Alerts on wide screens) light up together.
+ */
+function useActiveSections(): ReadonlySet<SectionId> {
+  const [active, setActive] = useState<ReadonlySet<SectionId>>(() => new Set<SectionId>(["overview"]));
   useEffect(() => {
     const els = NAV_ITEMS.map((n) => document.getElementById(n.id)).filter((e): e is HTMLElement => Boolean(e));
+    const inView = new Set<SectionId>();
     const obs = new IntersectionObserver(
       (entries) => {
-        const visible = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
-        if (visible[0]) setActive(visible[0].target.id as SectionId);
+        for (const e of entries) {
+          const id = e.target.id as SectionId;
+          if (e.isIntersecting) inView.add(id);
+          else inView.delete(id);
+        }
+        // Keep the last highlight while scrolling through a gap between sections.
+        if (inView.size) setActive(new Set(inView));
       },
-      { rootMargin: "-180px 0px -50% 0px", threshold: 0 },
+      { rootMargin: "-160px 0px -40% 0px", threshold: 0 },
     );
     els.forEach((e) => obs.observe(e));
     return () => obs.disconnect();
@@ -22,7 +32,7 @@ function useActiveSection(): SectionId {
 }
 
 export function NavRail() {
-  const active = useActiveSection();
+  const active = useActiveSections();
   const { openSources } = useUiActions();
   const SourcesIcon = SOURCES_NAV.icon;
   return (
@@ -34,7 +44,7 @@ export function NavRail() {
         <ul className="flex flex-1 flex-col gap-1 px-2 py-3">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
-            const current = active === item.id;
+            const current = active.has(item.id);
             return (
               <li key={item.id}>
                 <a
@@ -82,7 +92,7 @@ export function NavRail() {
         <ul className="grid grid-cols-6">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
-            const current = active === item.id;
+            const current = active.has(item.id);
             return (
               <li key={item.id}>
                 <a
