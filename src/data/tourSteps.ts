@@ -31,6 +31,11 @@ export const TOUR_STEPS: readonly TourStep[] = [
     body: "Plain-language explanation, the recommended next step and a short self-check for the selected system.",
   },
   {
+    target: "hazards",
+    title: "Five hazards of spaceflight",
+    body: "NASA's five hazards, each tied to what ASTRA-MED watches today: radiation, isolation, distance from Earth, gravity and the closed cabin.",
+  },
+  {
     target: "track",
     title: "Replay the mission",
     body: "Drag through 180 mission days. Orange and red ticks mark alerts. Demo start returns to the scenario's key day.",
@@ -49,5 +54,10 @@ export const TOUR_STEPS: readonly TourStep[] = [
     target: "weather",
     title: "Space weather from NASA",
     body: "Live NASA DONKI records and model forecasts of solar storms reaching Earth and Mars. Environmental hazard, never a personal dose.",
+  },
+  {
+    target: "tuesday",
+    title: "Tuesday, your companion",
+    body: "Talk, check in on mood and energy, recharge with an Earth view or a game, and contact the medical officer, with or without a ground link.",
   },
 ] as const;

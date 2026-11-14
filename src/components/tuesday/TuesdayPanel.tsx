@@ -4,6 +4,7 @@ import { METRIC_GUIDANCE } from "../../data/metricGuidance";
 import type { TuesdayAction } from "../../engine/tuesdayEngine";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
 import { useTuesday, type Attachment } from "../../hooks/useTuesday";
+import { MEDICAL_OFFICER_HASH } from "../../hooks/useView";
 import { useUiActions } from "../../hooks/useUi";
 import { compressImage, isLocalEndpoint } from "../../services/localModel";
 import { wellbeingSummary, type TuesdayMessage } from "../../state/tuesdayStore";
@@ -22,6 +23,9 @@ function ContactBar() {
         <Stethoscope aria-hidden="true" className="h-3.5 w-3.5" />
         Contact medical officer
       </button>
+      <a className="link text-xs" href={MEDICAL_OFFICER_HASH}>
+        Officer dashboard
+      </a>
       <span className={`text-xs ${linkUp ? "text-ink-2" : "text-caution"}`}>
         {linkUp ? "Ground link up" : "No ground link"}
         {data.outbox.length ? `, ${data.outbox.length} queued` : ""}
@@ -76,6 +80,17 @@ function ActionButton({ action, onReport }: { action: TuesdayAction; onReport: (
 }
 
 function MessageRow({ m, last, onReport }: { m: TuesdayMessage; last: boolean; onReport: () => void }) {
+  if (m.role === "officer") {
+    return (
+      <li className="mr-4 flex gap-2">
+        <Stethoscope aria-hidden="true" className="mt-1 h-5 w-5 shrink-0 text-cyan" />
+        <div className="min-w-0 flex-1 rounded-tile border border-cyan/50 bg-panel px-3 py-2 text-sm text-ink" aria-live={last ? "polite" : undefined}>
+          <p className="mb-1 text-2xs font-semibold uppercase tracking-label text-cyan">Medical officer, ground</p>
+          <p className="whitespace-pre-line">{m.text}</p>
+        </div>
+      </li>
+    );
+  }
   if (m.role === "user") {
     return (
       <li className="ml-8 self-end rounded-tile border border-line-strong bg-raised px-3 py-2 text-sm text-ink">
@@ -366,6 +381,7 @@ export function TuesdayLauncher() {
       type="button"
       className="fixed bottom-[88px] right-4 z-30 flex min-h-[48px] items-center gap-2 rounded-full border border-tue/60 bg-raised py-1.5 pl-2 pr-4 font-cond text-md font-semibold text-ink hover:border-tue lg:bottom-5"
       aria-haspopup="dialog"
+      data-tour="tuesday"
       onClick={() => setOpen(true)}
     >
       <TuesdayMark className="h-8 w-8" />

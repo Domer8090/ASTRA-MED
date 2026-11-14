@@ -184,7 +184,7 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
       const placeholder = store.addMessage({ role: "tuesday", text: "", via: "model", model: target });
       const history = store
         .getState()
-        .messages.filter((x) => x.id !== placeholder.id && x.text && !x.attachment)
+        .messages.filter((x) => x.id !== placeholder.id && x.text && !x.attachment && x.role !== "officer")
         .slice(-9, -1)
         .map((x) => ({ role: x.role === "user" ? ("user" as const) : ("assistant" as const), content: x.text }));
       const brief = buildHealthBrief(context);

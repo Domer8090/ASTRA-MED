@@ -65,6 +65,33 @@ cause harm. Instead every urgent or out-of-range answer starts with
 - The link is "up" when the browser is online. A **Simulate loss of signal**
   switch in the dialog demonstrates the no-link path.
 
+## Medical officer dashboard
+
+`#medical-officer` (rail link "Medical officer", or "Officer dashboard" in
+Tuesday) opens the ground view for the flight surgeon:
+
+- crew status, next action, readiness and last check;
+- messages from the crew, newest first, with "Mark reviewed" (the crew sees
+  "Reviewed by medical officer") and a reply box; replies appear in Tuesday as
+  "Medical officer, ground";
+- early warnings: pattern drift, trend watch, environmental hazards;
+- a heatmap of every indicator's status across all mission days (click a day);
+- today's indicators with rule, days outside range and when recorded;
+- the five hazards and wellbeing counts. Tuesday conversations stay private;
+  only counts are shown.
+
+In flight this view would run at mission control on data received at each
+contact. In the prototype it reads the same browser's data.
+
+## Hand control
+
+Pressing **Hand control** first shows short instructions for one or two
+hands ("Don't show this again" skips them next time). One hand: pinch and
+move to turn, push an open hand toward the camera to zoom, open and close to
+breathe. Two hands: pinch both and pull apart to zoom, move both to turn,
+each hand catches pods. The camera preview at the bottom right draws the
+tracked hand skeleton; the thumb-to-index line turns gold while pinching.
+
 ## The five hazards
 
 The console's hazard map (`src/engine/hazardMap.ts`) ties each NASA HRP hazard

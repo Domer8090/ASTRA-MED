@@ -5,7 +5,7 @@ import { chooseModels, isLocalEndpoint } from "../services/localModel";
 import { memoryBackend, createStorageService, STORAGE_KEYS } from "../services/storageService";
 import { createTuesdayStore, sanitizeTuesday, wellbeingSummary } from "../state/tuesdayStore";
 import { anomalyScore, baselineDrift, trainIsolationForest } from "./baselineEngine";
-import { readHandPose, type Landmark } from "./gestures";
+import { HAND_CONNECTIONS, handSpread, readHandPose, type Landmark } from "./gestures";
 import { retrieve } from "./retrieval";
 import { gaussian, mulberry32 } from "../utils/prng";
 import { latLonToVector, subsolarPoint } from "./sunPosition";
@@ -257,5 +257,28 @@ describe("medical officer message and hazard map", () => {
     expect(cards[2]!.facts[1]).toMatch(/1 message queued/);
     const nominal = engine("nominal", 42);
     expect(hazardMap({ ...nominal, linkUp: true, signalDelayMinutes: 11, queuedMessages: 0, checkInsThisWeek: 0, rechargeMinutesThisWeek: 0 }).filter((c) => c.status && c.status !== "NOMINAL")).toEqual([]);
+  });
+});
+
+describe("two hands and the ground loop", () => {
+  it("measures the spread between two hand cursors and draws a 21-point skeleton", () => {
+    const pose = (x: number, y: number) => ({ cursor: { x, y }, pinch: true, extended: 4, open: false, fist: false, palmSize: 0.2 });
+    expect(handSpread(pose(0.2, 0.5), pose(0.5, 0.9))).toBeCloseTo(0.5);
+    const points = new Set(HAND_CONNECTIONS.flat());
+    expect(points.size).toBe(21);
+  });
+
+  it("keeps officer replies and the reviewed flag through storage", () => {
+    const backend = memoryBackend();
+    const store = createTuesdayStore(createStorageService(backend));
+    store.queueMessage({ missionDay: 118, priority: "urgent", text: "URGENT: test" });
+    const id = store.getState().outbox[0]!.id;
+    store.markReviewed(id);
+    store.addMessage({ role: "officer", text: "Rest and repeat." });
+    store.updateSettings({ hands: 2, handIntroSeen: true });
+    const reread = sanitizeTuesday(JSON.parse(backend.data[STORAGE_KEYS.tuesday]!))!;
+    expect(reread.outbox[0]).toMatchObject({ id, reviewed: true });
+    expect(reread.messages.at(-1)).toMatchObject({ role: "officer", text: "Rest and repeat." });
+    expect(reread.settings).toMatchObject({ hands: 2, handIntroSeen: true });
   });
 });

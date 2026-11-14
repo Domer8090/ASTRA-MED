@@ -14,11 +14,16 @@ export interface TuesdaySettings {
   chatModel: string | null;
   medicalModel: string | null;
   voice: boolean;
+  /** Hand control: how many hands to track. */
+  hands: 1 | 2;
+  /** The hand-control instructions were dismissed with "Don't show again". */
+  handIntroSeen: boolean;
 }
 
 export interface TuesdayMessage {
   id: string;
-  role: "user" | "tuesday";
+  /** "officer" = a reply written by the medical officer on the ground. */
+  role: "user" | "tuesday" | "officer";
   text: string;
   at: string;
   /** "core" = offline rules, "model" = on-device language model. */
@@ -54,6 +59,8 @@ export interface OutboxMessage {
   missionDay: number;
   priority: "urgent" | "routine";
   text: string;
+  /** The medical officer marked it reviewed on the ground dashboard. */
+  reviewed?: boolean;
 }
 
 export interface TuesdayData {
@@ -65,7 +72,7 @@ export interface TuesdayData {
 }
 
 export const DEFAULT_TUESDAY: TuesdayData = {
-  settings: { endpoint: DEFAULT_ENDPOINT, useModel: true, chatModel: null, medicalModel: null, voice: false },
+  settings: { endpoint: DEFAULT_ENDPOINT, useModel: true, chatModel: null, medicalModel: null, voice: false, hands: 1, handIntroSeen: false },
   messages: [],
   activity: [],
   bestScore: 0,
@@ -97,7 +104,7 @@ function sanitizeMessage(x: unknown): TuesdayMessage | null {
   const id = s(x.id, 80);
   const text = s(x.text);
   const at = iso(x.at);
-  if (!id || text === undefined || !at || (x.role !== "user" && x.role !== "tuesday")) return null;
+  if (!id || text === undefined || !at || (x.role !== "user" && x.role !== "tuesday" && x.role !== "officer")) return null;
   const m: TuesdayMessage = { id, role: x.role, text, at };
   if (x.via === "core" || x.via === "model") m.via = x.via;
   const model = s(x.model, 120);
@@ -143,7 +150,7 @@ function sanitizeOutbox(x: unknown): OutboxMessage | null {
   const missionDay = n(x.missionDay, 1, 10_000);
   const text = s(x.text, 8000);
   if (!id || !createdAt || missionDay === undefined || !text || (x.priority !== "urgent" && x.priority !== "routine")) return null;
-  return { id, createdAt, missionDay, priority: x.priority, text };
+  return { id, createdAt, missionDay, priority: x.priority, text, ...(x.reviewed === true ? { reviewed: true } : {}) };
 }
 
 export function sanitizeTuesday(raw: unknown): TuesdayData | null {
@@ -157,6 +164,8 @@ export function sanitizeTuesday(raw: unknown): TuesdayData | null {
       chatModel: s(st.chatModel, 120) ?? null,
       medicalModel: s(st.medicalModel, 120) ?? null,
       voice: st.voice === true,
+      hands: st.hands === 2 ? 2 : 1,
+      handIntroSeen: st.handIntroSeen === true,
     },
     messages: Array.isArray(raw.messages) ? raw.messages.map(sanitizeMessage).filter((m): m is TuesdayMessage => m !== null).slice(-MAX_MESSAGES) : [],
     activity: Array.isArray(raw.activity) ? raw.activity.map(sanitizeActivity).filter((a): a is ActivityEntry => a !== null).slice(-MAX_ACTIVITY) : [],
@@ -222,6 +231,9 @@ export function createTuesdayStore(storage: StorageService = createStorageServic
     },
     queueMessage(m: Omit<OutboxMessage, "id" | "createdAt">): boolean {
       return commit({ ...state, outbox: [...state.outbox, { ...m, id: newId(), createdAt: new Date().toISOString() }].slice(-20) });
+    },
+    markReviewed(id: string, reviewed = true): boolean {
+      return commit({ ...state, outbox: state.outbox.map((m) => (m.id === id ? { ...m, reviewed } : m)) });
     },
     removeQueued(id: string): boolean {
       return commit({ ...state, outbox: state.outbox.filter((m) => m.id !== id) });

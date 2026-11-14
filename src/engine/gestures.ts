@@ -61,3 +61,18 @@ export function smoothPoint(prev: { x: number; y: number } | null, next: { x: nu
   if (!prev) return next;
   return { x: prev.x + (next.x - prev.x) * alpha, y: prev.y + (next.y - prev.y) * alpha };
 }
+
+/** Bones between the 21 hand landmarks, for drawing the hand skeleton. */
+export const HAND_CONNECTIONS: readonly (readonly [number, number])[] = [
+  [0, 1], [1, 2], [2, 3], [3, 4],
+  [0, 5], [5, 6], [6, 7], [7, 8],
+  [5, 9], [9, 10], [10, 11], [11, 12],
+  [9, 13], [13, 14], [14, 15], [15, 16],
+  [13, 17], [17, 18], [18, 19], [19, 20],
+  [0, 17],
+];
+
+/** Distance between two hand cursors, in screen fractions. Used for two-hand zoom. */
+export function handSpread(a: HandPose, b: HandPose): number {
+  return Math.hypot(a.cursor.x - b.cursor.x, a.cursor.y - b.cursor.y);
+}

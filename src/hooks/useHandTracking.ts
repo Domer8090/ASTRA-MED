@@ -1,17 +1,25 @@
 import { useEffect, useRef, useState } from "react";
-import { readHandPose, smoothPoint, type HandPose } from "../engine/gestures";
+import { readHandPose, smoothPoint, type HandPose, type Landmark } from "../engine/gestures";
 import { createHandLandmarker } from "../services/handTracking";
 
 export type HandStatus = "off" | "starting" | "tracking" | "no-hand" | "error";
 
 /**
- * Camera hand tracking for the Recharge deck. The latest pose lives in a ref so
- * games read it in their own animation loop without re-rendering React.
+ * Camera hand tracking for the Recharge deck, one or two hands. The latest
+ * poses live in refs so games read them in their own animation loop without
+ * re-rendering React. Hands are ordered left to right as the crew member sees
+ * them on screen.
  */
-export function useHandTracking(enabled: boolean) {
+export function useHandTracking(enabled: boolean, hands: 1 | 2 = 1) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  /** First hand (left-most on screen). Kept for one-hand controls. */
   const poseRef = useRef<HandPose | null>(null);
+  /** Every tracked hand, left to right on screen. */
+  const posesRef = useRef<HandPose[]>([]);
+  /** Raw landmarks per hand, in camera coordinates, for drawing the skeleton. */
+  const landmarksRef = useRef<Landmark[][]>([]);
   const [status, setStatus] = useState<HandStatus>("off");
+  const [handCount, setHandCount] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,10 +29,16 @@ export function useHandTracking(enabled: boolean) {
     let stream: MediaStream | null = null;
     let landmarker: Awaited<ReturnType<typeof createHandLandmarker>> | null = null;
     let last: HandStatus = "starting";
-    const report = (s: HandStatus) => {
-      if (s !== last && !cancelled) {
+    let lastCount = -1;
+    const report = (s: HandStatus, count: number) => {
+      if (cancelled) return;
+      if (s !== last) {
         last = s;
         setStatus(s);
+      }
+      if (count !== lastCount) {
+        lastCount = count;
+        setHandCount(count);
       }
     };
     queueMicrotask(() => {
@@ -43,7 +57,7 @@ export function useHandTracking(enabled: boolean) {
         if (!video) throw new Error("Camera preview is not ready.");
         video.srcObject = stream;
         await video.play();
-        landmarker = await createHandLandmarker();
+        landmarker = await createHandLandmarker(hands);
         if (cancelled) return;
         let lastTime = -1;
         const loop = () => {
@@ -51,15 +65,22 @@ export function useHandTracking(enabled: boolean) {
           if (video.readyState >= 2 && video.currentTime !== lastTime) {
             lastTime = video.currentTime;
             const result = landmarker.detectForVideo(video, performance.now());
-            const hand = result.landmarks[0];
-            const prev = poseRef.current;
-            const pose = hand ? readHandPose(hand, prev?.pinch ?? false) : null;
-            poseRef.current = pose ? { ...pose, cursor: smoothPoint(prev?.cursor ?? null, pose.cursor) } : null;
-            report(pose ? "tracking" : "no-hand");
+            // Camera x is mirrored on screen, so the right-most camera hand is left-most for the crew member.
+            const raw = result.landmarks.slice(0, hands).toSorted((a, b) => (b[0]?.x ?? 0) - (a[0]?.x ?? 0));
+            const prev = posesRef.current;
+            const poses: HandPose[] = [];
+            raw.forEach((lm, i) => {
+              const p = readHandPose(lm, prev[i]?.pinch ?? false);
+              if (p) poses.push({ ...p, cursor: smoothPoint(prev[i]?.cursor ?? null, p.cursor) });
+            });
+            landmarksRef.current = raw;
+            posesRef.current = poses;
+            poseRef.current = poses[0] ?? null;
+            report(poses.length ? "tracking" : "no-hand", poses.length);
           }
           raf = requestAnimationFrame(loop);
         };
-        report("no-hand");
+        report("no-hand", 0);
         loop();
       } catch (e) {
         if (cancelled) return;
@@ -71,7 +92,7 @@ export function useHandTracking(enabled: boolean) {
               ? "No camera was found. Mouse, touch and keyboard controls still work."
               : "Hand control could not start on this device. Mouse, touch and keyboard controls still work.",
         );
-        report("error");
+        report("error", 0);
       }
     })();
 
@@ -81,9 +102,20 @@ export function useHandTracking(enabled: boolean) {
       stream?.getTracks().forEach((t) => t.stop());
       landmarker?.close();
       poseRef.current = null;
+      posesRef.current = [];
+      landmarksRef.current = [];
       setStatus("off");
+      setHandCount(0);
     };
-  }, [enabled]);
+  }, [enabled, hands]);
 
-  return { videoRef, poseRef, status: enabled ? status : "off", error: enabled ? error : null };
+  return {
+    videoRef,
+    poseRef,
+    posesRef,
+    landmarksRef,
+    status: enabled ? status : "off",
+    handCount: enabled ? handCount : 0,
+    error: enabled ? error : null,
+  };
 }

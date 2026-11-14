@@ -10,13 +10,13 @@ import type { HandLandmarker } from "@mediapipe/tasks-vision";
 const WASM_BASE = `${import.meta.env.BASE_URL}mediapipe`;
 const MODEL_URL = `${import.meta.env.BASE_URL}models/hand_landmarker.task`;
 
-export async function createHandLandmarker(): Promise<HandLandmarker> {
+export async function createHandLandmarker(numHands: 1 | 2 = 1): Promise<HandLandmarker> {
   const { FilesetResolver, HandLandmarker } = await import("@mediapipe/tasks-vision");
   const fileset = await FilesetResolver.forVisionTasks(WASM_BASE);
   const options = (delegate: "GPU" | "CPU") => ({
     baseOptions: { modelAssetPath: MODEL_URL, delegate },
     runningMode: "VIDEO" as const,
-    numHands: 1,
+    numHands,
     minHandDetectionConfidence: 0.6,
     minTrackingConfidence: 0.5,
   });

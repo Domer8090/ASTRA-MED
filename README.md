@@ -76,8 +76,9 @@ CCMC DONKI host, which needs no key.
 | Space weather | DONKI FLR, SEP, CME and notifications; LIVE, PARTIAL, CACHED or DEMO / OFFLINE FALLBACK |
 | Five hazards | NASA HRP's five hazards of human spaceflight, each tied to today's engine status and an action: space radiation (dosimeter, space weather), isolation and confinement (Tuesday), distance from Earth (signal delay, ground link, medical-officer contact), gravity fields (heart, bone, eyes), hostile and closed environments (temperature, fluids, glucose) |
 | Contact medical officer | From the status band, Tuesday or the hazard map. Builds a message from the crew member's words and engine output. With a ground link the crew copies it into mission comms; with no link Tuesday lists on-board steps and queues it on the device |
+| Medical officer dashboard | `#medical-officer`: ground view with crew status, crew messages (mark reviewed, reply into Tuesday), early warnings, a status heatmap of every indicator across the mission, today's indicators and the five hazards |
 | Tuesday | Crew companion: chat grounded in the onboard protocol library, mood and energy check-ins, Isolation Forest baseline drift, optional on-device model (Ollama) for conversation, photos and lab reports |
-| Recharge deck | NASA Earth globe (yesterday's GIBS imagery, real day–night line, EPIC photo), Orbit Catch, paced breathing; optional camera hand control |
+| Recharge deck | Bundled NASA Earth globe (real day–night line, city lights, EPIC photo when a link exists), Orbit Catch, paced breathing; optional one- or two-hand camera control with instructions and a live hand-skeleton preview |
 | Data sources | Verified references, OSDR study notes, thresholds table, data labels, storage, plan targets, reset |
 
 Scenarios: **A** nominal (day 42), **B** cardiovascular caution (day 118),

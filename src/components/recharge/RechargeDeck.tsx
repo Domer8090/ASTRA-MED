@@ -7,6 +7,9 @@ import { useTuesday, type RechargeMode } from "../../hooks/useTuesday";
 import { TuesdayMark } from "../tuesday/TuesdayMark";
 import BreatheRing from "./BreatheRing";
 import OrbitCatch from "./OrbitCatch";
+import { HandIntro } from "./HandIntro";
+import { HandPreview } from "./HandPreview";
+import { Segmented } from "../shared/Segmented";
 
 const EarthView = lazy(() => import("./EarthView"));
 
@@ -20,7 +23,7 @@ const HAND_TEXT = {
   off: "Hand control off",
   starting: "Starting camera…",
   tracking: "Hand found",
-  "no-hand": "Show one hand to the camera",
+  "no-hand": "Show your hand to the camera",
   error: "Hand control unavailable",
 } as const;
 
@@ -35,7 +38,9 @@ export function RechargeDeck() {
   const toast = useToast();
   const ref = useRef<HTMLDialogElement>(null);
   const [handOn, setHandOn] = useState(false);
-  const { videoRef, poseRef, status, error } = useHandTracking(Boolean(recharge) && handOn);
+  const [intro, setIntro] = useState(false);
+  const hands = data.settings.hands;
+  const { videoRef, poseRef, posesRef, landmarksRef, status, handCount, error } = useHandTracking(Boolean(recharge) && handOn, hands);
   const openedAt = useRef(0);
   const earthStart = useRef(0);
   const lastEntry = useRef<string | null>(null);
@@ -72,6 +77,7 @@ export function RechargeDeck() {
   const finish = useCallback(() => {
     logEarth();
     setHandOn(false);
+    setIntro(false);
     setRating(false);
     closeRecharge();
   }, [logEarth, closeRecharge]);
@@ -144,7 +150,26 @@ export function RechargeDeck() {
               ))}
             </div>
             <div className="ml-auto flex items-center gap-2">
-              <button type="button" className="btn btn-secondary" aria-pressed={handOn} onClick={() => setHandOn((v) => !v)}>
+              {handOn ? (
+                <Segmented<1 | 2>
+                  label="Hands to track"
+                  value={hands}
+                  onChange={(v) => store.updateSettings({ hands: v })}
+                  options={[
+                    { value: 1, label: "1 hand" },
+                    { value: 2, label: "2 hands" },
+                  ]}
+                />
+              ) : null}
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  if (handOn) setHandOn(false);
+                  else if (data.settings.handIntroSeen) setHandOn(true);
+                  else setIntro(true);
+                }}
+              >
                 {handOn ? <CameraOff aria-hidden="true" className="h-4 w-4" /> : <Camera aria-hidden="true" className="h-4 w-4" />}
                 {handOn ? "Turn off hand control" : "Hand control"}
               </button>
@@ -156,29 +181,39 @@ export function RechargeDeck() {
 
           <p className="flex items-center gap-2 text-xs text-ink-2" role="status">
             <Hand aria-hidden="true" className={`h-3.5 w-3.5 ${status === "tracking" ? "text-tue" : ""}`} />
-            {error ?? HAND_TEXT[status]}
+            {error ?? (status === "tracking" && hands === 2 ? `${handCount} of 2 hands found` : HAND_TEXT[status])}
             {handOn && !error ? <span className="text-ink-3">Camera frames are processed in this browser and never leave the device.</span> : null}
-            {!handOn ? <span className="text-ink-3">Pinch to grab, move to turn; open hand toward the camera to zoom.</span> : null}
+            {!handOn ? (
+              <button type="button" className="link text-xs" onClick={() => setIntro(true)}>
+                How hand control works
+              </button>
+            ) : null}
           </p>
 
           <div className="relative min-h-0 flex-1">
             {recharge === "earth" ? (
               <Suspense fallback={<p className="p-4 text-sm text-ink-2">Loading the Earth view…</p>}>
-                <EarthView poseRef={poseRef} onRound={onFind} />
+                <EarthView poseRef={poseRef} posesRef={posesRef} onRound={onFind} />
               </Suspense>
             ) : recharge === "game" ? (
-              <OrbitCatch poseRef={poseRef} best={data.bestScore} onFinish={onGame} />
+              <OrbitCatch posesRef={posesRef} best={data.bestScore} onFinish={onGame} />
             ) : (
-              <BreatheRing poseRef={poseRef} handOn={handOn && status === "tracking"} onFinish={onBreathe} />
+              <BreatheRing posesRef={posesRef} handOn={handOn && status === "tracking"} onFinish={onBreathe} />
             )}
-            <video
-              ref={videoRef}
-              muted
-              playsInline
-              aria-label="Your camera, for hand control"
-              className={`pointer-events-none absolute bottom-3 right-3 w-36 -scale-x-100 rounded-tile border border-line-strong ${handOn ? "" : "hidden"}`}
-            />
+            <HandPreview videoRef={videoRef} landmarksRef={landmarksRef} posesRef={posesRef} visible={handOn && !error} />
           </div>
+
+          {intro ? (
+            <HandIntro
+              hands={hands}
+              onCancel={() => setIntro(false)}
+              onStart={(h, dontShow) => {
+                store.updateSettings({ hands: h, ...(dontShow ? { handIntroSeen: true } : {}) });
+                setIntro(false);
+                setHandOn(true);
+              }}
+            />
+          ) : null}
 
           {rating ? (
             <div role="dialog" aria-modal="true" aria-labelledby="rate-title" className="fixed inset-0 grid place-items-center bg-space/80 p-4">

@@ -7,6 +7,8 @@ import { CountermeasureGamification } from "./CountermeasureGamification";
 import { DataSourcesModal } from "./DataSourcesModal";
 import { GuidanceDrawer } from "./GuidanceDrawer";
 import { HazardMap } from "./HazardMap";
+import { MedicalOfficerDashboard } from "./officer/MedicalOfficerDashboard";
+import { useView } from "../hooks/useView";
 import { MeasurementForm } from "./MeasurementForm";
 import { MissionConsole } from "./console/MissionConsole";
 import { MissionTrack } from "./MissionTrack";
@@ -53,6 +55,15 @@ function SystemNotices() {
 }
 
 export function AppShell() {
+  const view = useView();
+  if (view === "medical-officer") {
+    return (
+      <>
+        <MedicalOfficerDashboard />
+        <MedicalContactDialog />
+      </>
+    );
+  }
   return (
     <div className="min-h-dvh pb-[76px] lg:pb-0">
       <a href="#main" className="sr-only z-[70] rounded-control bg-cyan px-3 py-2 font-semibold text-space focus:not-sr-only focus:fixed focus:left-3 focus:top-3">
@@ -60,7 +71,7 @@ export function AppShell() {
       </a>
       <NavRail />
       <div className="lg:pl-[var(--rail-w)]">
-        <div className="sticky top-0 z-30">
+        <div data-sticky-header className="sticky top-0 z-30">
           <TopTelemetryBar />
           <div className="hidden md:block">
             <MissionTrack />

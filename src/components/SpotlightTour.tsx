@@ -23,12 +23,40 @@ function targetOf(step: TourStep): HTMLElement | null {
   return null;
 }
 
+/** Bottom edge of the sticky top bar; content scrolled under it is hidden. */
+function headerBottom(): number {
+  const h = document.querySelector<HTMLElement>("[data-sticky-header]");
+  if (!h) return 0;
+  const r = h.getBoundingClientRect();
+  return r.height > 0 && getComputedStyle(h).position === "sticky" ? Math.max(0, r.bottom) : 0;
+}
+
+/** True when the target sits in the sticky header or is fixed (it never scrolls under the header). */
+function pinned(el: HTMLElement): boolean {
+  if (el.closest("[data-sticky-header]")) return true;
+  for (let n: HTMLElement | null = el; n; n = n.parentElement) if (getComputedStyle(n).position === "fixed") return true;
+  return false;
+}
+
 function measure(el: HTMLElement): Rect {
   const r = el.getBoundingClientRect();
-  // Clamp very tall targets to the viewport so the hole stays on screen.
-  const top = Math.max(r.top - PAD, 8);
+  // Never draw the hole over the sticky header unless the target lives there.
+  const ceiling = pinned(el) ? 4 : headerBottom() + 4;
+  const top = Math.max(r.top - PAD, ceiling);
   const bottom = Math.min(r.bottom + PAD, window.innerHeight - 8);
-  return { top, left: Math.max(r.left - PAD, 4), width: Math.min(r.width + PAD * 2, window.innerWidth - 8), height: Math.max(bottom - top, 40) };
+  const left = Math.max(r.left - PAD, 4);
+  const right = Math.min(r.right + PAD, window.innerWidth - 4);
+  return { top, left, width: Math.max(right - left, 40), height: Math.max(bottom - top, 40) };
+}
+
+/** Scroll the target just below the sticky header (or centre it when it is short). */
+function bringIntoView(el: HTMLElement): void {
+  if (pinned(el)) return;
+  const r = el.getBoundingClientRect();
+  const top = headerBottom();
+  const room = window.innerHeight - top;
+  const offset = r.height + 2 * PAD < room - 220 ? (room - r.height) / 2 : 16;
+  window.scrollTo({ top: Math.max(0, window.scrollY + r.top - top - offset), behavior: "auto" });
 }
 
 /** Steps that have a visible target at this screen size. */
@@ -36,16 +64,39 @@ function visibleSteps(): TourStep[] {
   return TOUR_STEPS.filter((s) => targetOf(s) !== null);
 }
 
-/** Card placement: below the hole, else above, else docked to the bottom of the screen. */
+const CARD_H = 230;
+
+/**
+ * Wide, tall targets leave no room for the card above, below or beside them.
+ * Show the top part of the target and keep the bottom of the screen for the card.
+ */
+function fitHole(hole: Rect): Rect {
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  if (vw < 640) return hole;
+  const gap = 12;
+  const fitsBelow = hole.top + hole.height + gap + CARD_H < vh;
+  const fitsAbove = hole.top - CARD_H - gap > headerBottom();
+  const fitsSide = hole.left + hole.width + gap + CARD_W < vw || hole.left - gap - CARD_W > 0;
+  if (fitsBelow || fitsAbove || fitsSide) return hole;
+  return { ...hole, height: Math.max(80, vh - CARD_H - 2 * gap - hole.top) };
+}
+
+/** Card placement: below, above, then beside the hole; on phones, docked away from the hole. */
 function cardStyle(hole: Rect | null): React.CSSProperties {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
-  if (!hole || vw < 640) return { left: 12, right: 12, bottom: 84 };
-  const left = Math.min(Math.max(hole.left, 12), vw - CARD_W - 12);
-  const below = hole.top + hole.height + 12;
-  if (below + 200 < vh) return { left, top: below, width: CARD_W };
-  if (hole.top - 212 > 0) return { left, top: hole.top - 212, width: CARD_W };
-  return { left: Math.max(vw - CARD_W - 24, 12), bottom: 24, width: CARD_W };
+  const gap = 12;
+  if (!hole) return { left: 12, right: 12, bottom: 84 };
+  if (vw < 640) return hole.top + hole.height / 2 > vh / 2 ? { left: 12, right: 12, top: Math.max(12, headerBottom() + 8) } : { left: 12, right: 12, bottom: 84 };
+  const left = Math.min(Math.max(hole.left, gap), vw - CARD_W - gap);
+  const below = hole.top + hole.height + gap;
+  if (below + CARD_H < vh) return { left, top: below, width: CARD_W };
+  if (hole.top - CARD_H - gap > headerBottom()) return { left, top: hole.top - CARD_H - gap, width: CARD_W };
+  const top = Math.min(Math.max(hole.top, headerBottom() + gap), vh - CARD_H - gap);
+  if (hole.left + hole.width + gap + CARD_W < vw) return { left: hole.left + hole.width + gap, top, width: CARD_W };
+  if (hole.left - gap - CARD_W > 0) return { left: hole.left - gap - CARD_W, top, width: CARD_W };
+  return { left: gap, bottom: gap, width: CARD_W };
 }
 
 function Tour({ onEnd }: { onEnd: () => void }) {
@@ -58,15 +109,22 @@ function Tour({ onEnd }: { onEnd: () => void }) {
 
   const place = useCallback(() => {
     const el = step ? targetOf(step) : null;
-    setHole(el ? measure(el) : null);
+    setHole(el ? fitHole(measure(el)) : null);
   }, [step]);
 
   useLayoutEffect(() => {
     if (!step) return;
     const el = targetOf(step);
-    el?.scrollIntoView({ block: el.getBoundingClientRect().height > window.innerHeight * 0.7 ? "start" : "center", behavior: "auto" });
+    if (el) bringIntoView(el);
     place();
-    cardRef.current?.focus();
+    // Layout can settle a frame later (lazy charts, fonts); measure again.
+    const raf = requestAnimationFrame(place);
+    const late = window.setTimeout(place, 250);
+    cardRef.current?.focus({ preventScroll: true });
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(late);
+    };
   }, [step, place]);
 
   useEffect(() => {

@@ -4,7 +4,7 @@ import { useUiActions, type SourcesTab } from "../hooks/useUi";
 import { isMetricId } from "../utils/validation";
 import { useConsoleFocus } from "./console/useConsoleFocus";
 
-const SECTIONS = new Set(["overview", "trends", "countermeasures", "alerts", "weather", "vitals", "body", "intel"]);
+const SECTIONS = new Set(["overview", "hazards", "trends", "countermeasures", "alerts", "weather", "vitals", "body", "intel"]);
 const SOURCE_TABS = new Set<SourcesTab>(["about", "sources", "thresholds", "labels", "storage"]);
 
 /**

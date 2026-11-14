@@ -167,6 +167,7 @@ function ContactBody({ initialPriority, initialReport }: { initialPriority: Cont
               <li key={q.id} className="flex flex-wrap items-center gap-2 rounded-tile border border-line bg-panel px-3 py-2 text-sm">
                 <span className={`chip-tag ${q.priority === "urgent" ? "border-critical/60 text-critical" : "border-line-strong text-ink-2"}`}>{q.priority}</span>
                 <span className="num text-xs text-ink-2">Day {q.missionDay}, {new Date(q.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                {q.reviewed ? <span className="chip-tag border-nominal/50 text-nominal">Reviewed by medical officer</span> : null}
                 <span className="ml-auto flex gap-1">
                   {linkUp ? (
                     <button

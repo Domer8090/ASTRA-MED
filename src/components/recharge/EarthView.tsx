@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { Crosshair, LocateFixed, Satellite } from "lucide-react";
 import { COLORS } from "../../config/theme";
-import type { HandPose } from "../../engine/gestures";
+import { handSpread, type HandPose } from "../../engine/gestures";
 import { latLonToVector, subsolarPoint } from "../../engine/sunPosition";
 import { EARTH_PLACES, fetchLatestEpic, loadEarthTextures, type EarthPlace, type EarthTextures, type EpicImage } from "../../services/earthImagery";
 
@@ -39,6 +39,8 @@ const CENTERED_DEG = 7;
 
 interface Props {
   poseRef: MutableRefObject<HandPose | null>;
+  /** All tracked hands; two pinching hands zoom and turn together. */
+  posesRef: MutableRefObject<HandPose[]>;
   onRound: (found: number, seconds: number) => void;
 }
 
@@ -53,7 +55,7 @@ function orientationFor(place: { lat: number; lon: number }): { yaw: number; pit
 }
 
 /** Interactive globe lit by the real Sun position, with NASA imagery from yesterday. */
-export default function EarthView({ poseRef, onRound }: Props) {
+export default function EarthView({ poseRef, posesRef, onRound }: Props) {
   const mount = useRef<HTMLDivElement>(null);
   const view = useRef({ yaw: 0, pitch: 0.35, dist: 3.1, targetYaw: null as number | null, targetPitch: 0, spin: true });
   const groupRef = useRef<THREE.Group | null>(null);
@@ -169,9 +171,27 @@ export default function EarthView({ poseRef, onRound }: Props) {
     let palmBase: number | null = null;
     let heldSince = 0;
     let lastLabel = 0;
+    let twoFrom: { mid: { x: number; y: number }; spread: number; dist: number } | null = null;
     const tick = (now: number) => {
+      const both = posesRef.current;
       const pose = poseRef.current;
-      if (pose) {
+      if (both.length >= 2 && both[0]!.pinch && both[1]!.pinch) {
+        // Two pinching hands: pull apart to zoom in, move together to turn.
+        const [a, b] = both as [HandPose, HandPose];
+        const mid = { x: (a.cursor.x + b.cursor.x) / 2, y: (a.cursor.y + b.cursor.y) / 2 };
+        const spread = Math.max(0.02, handSpread(a, b));
+        v.spin = false;
+        v.targetYaw = null;
+        if (twoFrom) {
+          v.yaw += (mid.x - twoFrom.mid.x) * 5;
+          v.pitch = Math.max(-1.4, Math.min(1.4, v.pitch + (mid.y - twoFrom.mid.y) * 4));
+          v.dist = Math.max(1.5, Math.min(5, twoFrom.dist * (twoFrom.spread / spread)));
+          twoFrom = { ...twoFrom, mid };
+        } else twoFrom = { mid, spread, dist: v.dist };
+        pinchFrom = null;
+        palmBase = null;
+      } else if (pose) {
+        twoFrom = null;
         if (pose.pinch) {
           v.spin = false;
           v.targetYaw = null;
@@ -191,6 +211,7 @@ export default function EarthView({ poseRef, onRound }: Props) {
           } else palmBase = null;
         }
       } else {
+        twoFrom = null;
         pinchFrom = null;
         palmBase = null;
       }
@@ -274,7 +295,7 @@ export default function EarthView({ poseRef, onRound }: Props) {
       canvas.remove();
       groupRef.current = null;
     };
-  }, [tex, poseRef, onRound]);
+  }, [tex, poseRef, posesRef, onRound]);
 
   const flyTo = (p: { lat: number; lon: number }) => {
     const o = orientationFor(p);

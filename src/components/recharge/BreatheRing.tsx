@@ -9,7 +9,7 @@ const CYCLES = 6;
 const TOTAL = (IN_S + OUT_S) * CYCLES;
 
 interface Props {
-  poseRef: MutableRefObject<HandPose | null>;
+  posesRef: MutableRefObject<HandPose[]>;
   handOn: boolean;
   onFinish: (seconds: number, syncPercent: number | null) => void;
 }
@@ -19,7 +19,7 @@ interface Props {
  * the hand to breathe in and close it to breathe out; Tuesday reports how
  * closely the hand followed the ring. A relaxation exercise, not a treatment.
  */
-export default function BreatheRing({ poseRef, handOn, onFinish }: Props) {
+export default function BreatheRing({ posesRef, handOn, onFinish }: Props) {
   const ringRef = useRef<SVGCircleElement>(null);
   const [running, setRunning] = useState(false);
   const [label, setLabel] = useState("Breathe in");
@@ -55,16 +55,17 @@ export default function BreatheRing({ poseRef, handOn, onFinish }: Props) {
         lastLabel = next;
         setLabel(next);
       }
-      const pose = poseRef.current;
-      if (pose) {
+      const poses = posesRef.current;
+      if (poses.length) {
         seen++;
-        if ((inhale && pose.extended >= 3) || (!inhale && pose.extended <= 1)) matched++;
+        // With two hands, both must follow the ring.
+        if (poses.every((p) => (inhale ? p.extended >= 3 : p.extended <= 1))) matched++;
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [running, poseRef]);
+  }, [running, posesRef]);
 
   return (
     <div className="grid h-full min-h-[360px] place-items-center rounded-panel border border-line bg-space p-4">

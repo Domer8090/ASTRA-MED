@@ -17,7 +17,7 @@ interface Pod {
 }
 
 interface Props {
-  poseRef: MutableRefObject<HandPose | null>;
+  posesRef: MutableRefObject<HandPose[]>;
   best: number;
   onFinish: (score: number, seconds: number) => void;
 }
@@ -27,7 +27,7 @@ interface Props {
  * pod and pinch (or click or tap) to collect it. Gold stars are worth more.
  * Nothing is lost by missing: there is no fail state.
  */
-export default function OrbitCatch({ poseRef, best, onFinish }: Props) {
+export default function OrbitCatch({ posesRef, best, onFinish }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [phase, setPhase] = useState<"ready" | "playing" | "done">("ready");
   const [score, setScore] = useState(0);
@@ -47,7 +47,7 @@ export default function OrbitCatch({ poseRef, best, onFinish }: Props) {
     const sparks: { x: number; y: number; t: number; text: string }[] = [];
     let pointer: { x: number; y: number } | null = null;
     let clicked = false;
-    let wasPinch = false;
+    let wasPinch: boolean[] = [];
     let points = 0;
     let streak = 0;
     const start = performance.now();
@@ -123,11 +123,13 @@ export default function OrbitCatch({ poseRef, best, onFinish }: Props) {
         pods.push({ x, y, vx: (tx / len) * speed + Math.cos(angle) * 4, vy: (ty / len) * speed + Math.sin(angle) * 4, r: 14 + rand() * 8, kind: rand() < 0.15 ? "star" : "pod", born: now });
       }
 
-      const pose = poseRef.current;
-      const hand = pose ? { x: pose.cursor.x * w, y: pose.cursor.y * h } : null;
-      const cursor = hand ?? pointer;
-      if (pose?.pinch && !wasPinch && hand) collectAt(hand.x, hand.y, now);
-      wasPinch = Boolean(pose?.pinch);
+      const poses = posesRef.current;
+      const hands = poses.map((p) => ({ x: p.cursor.x * w, y: p.cursor.y * h, pinch: p.pinch }));
+      hands.forEach((hd, i) => {
+        if (hd.pinch && !wasPinch[i]) collectAt(hd.x, hd.y, now);
+      });
+      wasPinch = hands.map((hd) => hd.pinch);
+      const cursors = hands.length ? hands : pointer ? [{ ...pointer, pinch: false }] : [];
       if (clicked && pointer) collectAt(pointer.x, pointer.y, now);
       clicked = false;
 
@@ -167,13 +169,13 @@ export default function OrbitCatch({ poseRef, best, onFinish }: Props) {
         ctx.fillText(s.text, s.x, s.y - age * 24);
         ctx.globalAlpha = 1;
       }
-      if (cursor) {
+      cursors.forEach((c, i) => {
         ctx.beginPath();
-        ctx.arc(cursor.x, cursor.y, pose?.pinch ? 10 : 16, 0, Math.PI * 2);
-        ctx.strokeStyle = COLORS.cyan;
+        ctx.arc(c.x, c.y, c.pinch ? 10 : 16, 0, Math.PI * 2);
+        ctx.strokeStyle = i === 0 ? COLORS.cyan : COLORS.tue;
         ctx.lineWidth = 2;
         ctx.stroke();
-      }
+      });
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -184,7 +186,7 @@ export default function OrbitCatch({ poseRef, best, onFinish }: Props) {
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerdown", onDown);
     };
-  }, [phase, poseRef]);
+  }, [phase, posesRef]);
 
   const startRound = () => {
     setScore(0);
