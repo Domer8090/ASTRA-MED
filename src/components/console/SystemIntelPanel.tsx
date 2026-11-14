@@ -1,6 +1,7 @@
-import { BookOpen, ChevronDown, Plus, Radiation } from "lucide-react";
+import { BookOpen, ChevronDown, ExternalLink, Plus, Radiation } from "lucide-react";
 import { BODY_SYSTEMS } from "../../data/bodySystems";
 import { METRIC_GUIDANCE } from "../../data/metricGuidance";
+import { HRP_HAZARDS_URL, hazardsForSystem } from "../../data/spaceflightHazards";
 import { useMissionModel } from "../../hooks/useMissionModel";
 import { useMissionStore } from "../../hooks/useMissionState";
 import { useToast } from "../../hooks/useToast";
@@ -215,6 +216,18 @@ export function SystemIntelPanel() {
           Equipment: {def.deviceRequired} {def.caveat}
         </p>
       </details>
+
+      <p className="mx-4 mt-4 text-xs text-ink-2">
+        <span className="font-semibold text-ink">NASA HRP hazards: </span>
+        {hazardsForSystem(selectedSystem)
+          .map((h) => h.name)
+          .join(", ")}
+        .{" "}
+        <a href={HRP_HAZARDS_URL} target="_blank" rel="noopener noreferrer" className="link inline-flex items-center gap-0.5">
+          5 Hazards of Human Spaceflight
+          <ExternalLink aria-hidden="true" className="h-3 w-3" />
+        </a>
+      </p>
 
       <div className="mt-auto flex flex-wrap gap-2 px-4 py-3">
         <button type="button" className="btn btn-secondary text-xs" onClick={() => openGuidance({ kind: "metric", id: focus.metricId })}>

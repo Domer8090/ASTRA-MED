@@ -287,7 +287,11 @@ export function SpaceWeatherPanel() {
         <Radiation aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-caution" />
         <p className="text-sm text-ink">
           <span className="font-cond font-bold uppercase tracking-label text-caution">Environmental hazard, not personal dose. </span>
-          Flare class, SEP and CME records describe the space environment near Earth. Personal exposure comes only from the dosimeter or a validated mission model.
+          Flare class, SEP and CME records describe the space environment near Earth. Personal exposure comes only from the dosimeter or a validated mission model. The{" "}
+          <a href="https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp" target="_blank" rel="noopener noreferrer" className="link">
+            Canadian Space Agency
+          </a>{" "}
+          notes that neutrons alone are about 30% of the radiation on the ISS, which is why it is developing a continuous on-board neutron monitor.
         </p>
       </div>
 

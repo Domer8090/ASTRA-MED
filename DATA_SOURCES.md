@@ -180,6 +180,18 @@ Defined in `src/data/scenarioHazards.ts` and evaluated by `src/engine/advisoryEn
   documented synthetic dosimeter overlay is what drives the radiation CAUTION.
 - Live DONKI data describes the near-Earth environment, not the demo spacecraft.
 
+## 3c. Forecasts and derived context added 2026-11-14
+
+| Data | Source | How it is used | Label |
+| --- | --- | --- | --- |
+| CME arrival forecasts at Earth and Mars | NASA CCMC WSA-ENLIL runs via DONKI `WSAEnlilSimulations` (CCMC DONKI API first with DEMO_KEY; api.nasa.gov with a personal key), last 10 days | Forecast card in the space-weather monitor; status-band notice for a Mars arrival within 72 h. Latest model run per CME and location is kept. Cached as `astra-med:v1:enlil-cache`. Never sets a dose or status. | LIVE (this session), CACHED, or NOT LOADED |
+| Earth–Mars one-way signal delay | NASA JPL SSD *Approximate Positions of the Planets*, Keplerian elements (Standish, valid 1800–2050), computed in the browser | Status band and Overview. Checked against the 2025-01-12 close approach (0.642 AU). | Computed, no network |
+| Trend watch | ASTRA-MED engine (`src/engine/trendEngine.ts`), 7-day least-squares fit over the user's own readings | Early-warning projection for NOMINAL indicators that have left their reference band; never changes a status. Parameters in `TREND_WATCH`, tagged `astra-assumption`. | TREND WATCH |
+| Five hazards of human spaceflight | NASA HRP, https://www.nasa.gov/hrp/hazards/ | Overview table and per-system hazard line. The hazard-to-system mapping is ASTRA-MED's own. | Reference |
+| Partner agency radiation context | Canadian Space Agency: *Monitoring radiation for astronaut health* (2026-02-26), *How does radiation affect the human body in space?*, *Why do we conduct science experiments in space?* | Explains why personal exposure needs on-board dosimetry and why a large SEP calls for shelter. No CSA data is loaded. | Reference |
+
+The flight-surgeon report (`src/engine/reportEngine.ts`) is built on the device from the same engine output. It is shown, copied or saved as a `.txt` file only when the crew chooses; nothing is transmitted.
+
 ## 4. Diagnostic thresholds
 
 All thresholds live in `src/config/thresholds.ts`, each tagged with its

@@ -101,3 +101,33 @@ describe("onboarding record", () => {
     expect(sanitizeOnboarding(null)).toBeNull();
   });
 });
+
+describe("flight-surgeon report", () => {
+  it("lists the flagged indicators with their rules and labels synthetic data", async () => {
+    const { buildSurgeonReport } = await import("./reportEngine");
+    const { aggregateStatus } = await import("./diagnosticEngine");
+    const { evaluateBodySystems } = await import("./bodySystemEngine");
+    const { SCENARIOS } = await import("../data/scenarios");
+    const days = buildEffectiveDays("cardiovascular", []);
+    const diagnostics = evaluateAllMetrics({ days, settings: { aredTargetMinutes: 60, hydrationTargetLiters: 2 }, evaluatedAt: "2026-11-14T00:00:00Z" }, 118);
+    const text = buildSurgeonReport({
+      day: 118,
+      scenario: SCENARIOS.cardiovascular,
+      overall: aggregateStatus(diagnostics),
+      systems: evaluateBodySystems(diagnostics, []),
+      diagnostics,
+      trends: [],
+      advisories: [],
+      followUps: [],
+      readiness: { score: 80, components: [], taskCompletion: 1, weeklyAdherence: 1, followUpCompletion: 1, dataFreshness: 1, completedTasks: 6, totalTasks: 6, totalXp: 0, todayXp: 0, streakDays: 0, message: "" },
+      days,
+      generatedAt: "2026-11-14 10:00",
+      signalDelayMinutes: 11,
+    });
+    expect(text).toMatch(/OVERALL STATUS: CAUTION/);
+    expect(text).toMatch(/Resting heart rate: CAUTION/);
+    expect(text).toMatch(/Rule: .*85/);
+    expect(text).toMatch(/SYNTHETIC demo telemetry/);
+    expect(text).toMatch(/not NASA flight rules/);
+  });
+});

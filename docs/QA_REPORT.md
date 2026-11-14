@@ -158,3 +158,15 @@ Not checked in real Chrome: the window would not shrink below desktop width, so 
 | Trend watch (`src/engine/trendEngine.ts`): a 7-day least-squares projection for NOMINAL indicators that have left their reference band. Shown when the line reaches a caution limit within 7 days with R² ≥ 0.5. Never changes a status. ASTRA assumption. | Scenario B flags heart rate from day 104, eight days before CAUTION on day 112. Nominal day 42 is quiet. Unit tests. |
 | Earth and Mars CME forecast from NASA CCMC WSA-ENLIL runs in DONKI (`WSAEnlilSimulations`, CORS open), cached as `astra-med:v1:enlil-cache`, labelled LIVE / CACHED / NOT LOADED. A Mars arrival within 72 h also appears in the status band. | Live fetch from ccmc.gsfc.nasa.gov; parsing, de-duplication and cache sanitising unit-tested. |
 | Earth–Mars one-way signal delay from JPL approximate Keplerian elements, shown in the status band and the Overview. | 2025-01-12 gives 0.642 AU (published close approach 0.642 AU); 2027-02-19 gives 0.678 AU. |
+
+
+## 10. Rubric gap fixes (2026-11-14)
+
+| Change | Verified |
+| --- | --- |
+| Five HRP hazards mapped to body systems (Overview table, system-panel line with link) | Day 131: Immune & Radiation lists space radiation, distance from Earth, hostile and closed environments. |
+| CSA radiation resources cited (space-weather monitor, Overview, Data sources) | All three CSA URLs and both HRP URLs returned the expected page titles on 2026-11-14. |
+| Flight-surgeon report: on-device text with status, rules, trends, hazards, follow-ups and 7 days of readings; Copy and Download .txt | Opened on day 131 from the subpath build; unit test checks rules and synthetic labelling. |
+| CRITICAL demo path | Logged 110 bpm on Scenario B day 118: status CRITICAL with "contact the medical officer when communication is available"; entry removed afterwards. |
+| GitHub Pages workflow and `VITE_BASE` subpath | `VITE_BASE=/ASTRA-MED/` build served by `vite preview`: page, JS bundle, `sw.js` and the offline archive all HTTP 200. No API key in `dist/`. |
+| Tests independent of a local API key | `vite.config.ts` sets `VITE_NASA_API_KEY=DEMO_KEY` for Vitest; 80 tests pass with `.env.local` present. |

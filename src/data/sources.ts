@@ -14,6 +14,43 @@ export interface SourceEntry {
 
 export const REFERENCE_SOURCES: SourceEntry[] = [
   {
+    title: "5 Hazards of Human Spaceflight",
+    url: "https://www.nasa.gov/hrp/hazards/",
+    publisher: "NASA Human Research Program",
+    description: "Space radiation, isolation and confinement, distance from Earth, gravity fields, and hostile or closed environments, and how they can feed off one another.",
+    usedFor: "Organises the five body systems and features by hazard (Overview and system panel). The mapping is ASTRA-MED's own.",
+  },
+  {
+    title: "Risks of Human Spaceflight",
+    url: "https://www.nasa.gov/hrp/risks/",
+    publisher: "NASA Human Research Program",
+    description: "Index of HRP's human health and performance risks linked to the five hazards.",
+    usedFor: "Entry point for the risk pages cited with individual recommendations.",
+  },
+  {
+    title: "Monitoring radiation for astronaut health",
+    url: "https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp",
+    publisher: "Canadian Space Agency (CSA), 2026-02-26",
+    description:
+      "CSA's Canadian Active Neutron Spectrometer (CANS), a compact instrument that measures neutron exposure continuously and autonomously. Neutrons make up about 30% of the total radiation on the ISS.",
+    usedFor: "Context for why personal exposure comes from on-board dosimetry, not from space-weather alerts (space-weather monitor).",
+  },
+  {
+    title: "How does radiation affect the human body in space?",
+    url: "https://www.asc-csa.gc.ca/eng/astronauts/space-medicine/radiation.asp",
+    publisher: "Canadian Space Agency (CSA)",
+    description: "Galactic cosmic rays, solar particle events and trapped radiation; acute effects are not expected except in a large solar particle event.",
+    usedFor: "Why Scenario C treats a solar particle event as the case that needs shelter.",
+  },
+  {
+    title: "Why do we conduct science experiments in space?",
+    url: "https://www.asc-csa.gc.ca/eng/iss/science/why-do-we-conduct-science-experiments-in-space.asp",
+    publisher: "Canadian Space Agency (CSA)",
+    description:
+      "Moon and Mars missions bring more weightlessness, radiation, isolation and communication delay, and less ability to rely on Earth; ISS research characterises these risks and countermeasures.",
+    usedFor: "Framing for on-board self-assessment and the Earth–Mars signal delay (Overview).",
+  },
+  {
     title: "DONKI WSA-ENLIL Simulations",
     url: "https://ccmc.gsfc.nasa.gov/tools/DONKI/",
     publisher: "NASA Community Coordinated Modeling Center (CCMC)",

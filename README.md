@@ -32,7 +32,7 @@ npm run preview    # http://localhost:4173
 Checks:
 
 ```bash
-npm run check      # TypeScript, ESLint, 67 unit tests
+npm run check      # TypeScript, ESLint, Vitest unit tests
 ```
 
 ```bash
@@ -104,3 +104,11 @@ src/components presentation only
   not current conditions.
 - Live DONKI data describes the near-Earth environment, not the demo spacecraft.
 - One demo crew identity; no multi-crew support.
+
+## Public build
+
+`.github/workflows/pages.yml` checks, builds and deploys the app to GitHub
+Pages on every push to `main` (enable Pages with source "GitHub Actions" in
+the repository settings). The public build uses NASA's `DEMO_KEY`; never add a
+personal `VITE_NASA_API_KEY` to the workflow, because Vite embeds it in the
+bundle.

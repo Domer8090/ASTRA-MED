@@ -4,6 +4,8 @@ import { ARED, describeThresholds, HYDRATION, MISSION } from "../config/threshol
 import { ARCHIVE_PROVENANCE } from "../data/fallbackDonki";
 import { SEP_DOSE_MODEL_SUMMARY } from "../data/scenarioHazards";
 import { LIMITATIONS_STATEMENT, OSDR_STUDIES, REFERENCE_SOURCES } from "../data/sources";
+import { BODY_SYSTEMS } from "../data/bodySystems";
+import { HRP_HAZARDS_URL, SPACEFLIGHT_HAZARDS } from "../data/spaceflightHazards";
 import { useMissionState, useMissionStore } from "../hooks/useMissionState";
 import { useToast } from "../hooks/useToast";
 import { useOnboarding } from "../hooks/useOnboarding";
@@ -99,6 +101,43 @@ function About() {
       </div>
 
       <div>
+        <h4 className="label">The five hazards of human spaceflight</h4>
+        <p className="mt-1 max-w-[80ch] text-sm text-ink-2">
+          NASA&apos;s Human Research Program groups spaceflight risks into five hazards. This is how ASTRA-MED&apos;s body systems and features relate to each one (our mapping, not a NASA table).{" "}
+          <a href={HRP_HAZARDS_URL} target="_blank" rel="noopener noreferrer" className="link inline-flex items-center gap-0.5">
+            NASA HRP: 5 Hazards
+            <ExternalLink aria-hidden="true" className="h-3 w-3" />
+          </a>
+        </p>
+        <div className="mt-2 overflow-x-auto rounded-tile border border-line">
+          <table className="w-full min-w-[620px] border-collapse text-left text-sm">
+            <caption className="sr-only">Five hazards, the body systems they affect and what ASTRA-MED does for each</caption>
+            <thead className="bg-panel">
+              <tr>
+                {["Hazard", "Body systems", "What ASTRA-MED watches or does"].map((h) => (
+                  <th key={h} scope="col" className="label border-b border-line px-3 py-2">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {SPACEFLIGHT_HAZARDS.map((h) => (
+                <tr key={h.id} className="border-b border-line align-top last:border-b-0">
+                  <th scope="row" className="px-3 py-2 font-semibold text-ink">
+                    {h.name}
+                    <span className="mt-0.5 block text-2xs font-normal text-ink-3">{h.summary}</span>
+                  </th>
+                  <td className="px-3 py-2 text-ink-2">{h.systems.length === 5 ? "All five" : h.systems.map((s) => BODY_SYSTEMS[s].shortName).join(", ")}</td>
+                  <td className="px-3 py-2 text-ink-2">{h.inApp}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div>
         <h4 className="label">How ASTRA-MED works</h4>
         <ol className="mt-2 grid gap-3 md:grid-cols-3">
           {steps.map((s, i) => (
@@ -127,6 +166,10 @@ function About() {
           <li className="rounded-tile border border-line p-3">
             <span className="font-semibold text-ink">Computed: Earth–Mars signal delay.</span>{" "}
             <span className="text-ink-2">From the NASA JPL Keplerian elements for approximate planet positions, computed in the browser with no network.</span>
+          </li>
+          <li className="rounded-tile border border-line p-3">
+            <span className="font-semibold text-ink">Partner agency: Canadian Space Agency.</span>{" "}
+            <span className="text-ink-2">CSA&apos;s radiation pages explain why personal exposure needs on-board dosimetry (its CANS neutron spectrometer; neutrons are about 30% of ISS radiation) and why a large solar particle event is the case that calls for shelter.</span>
           </li>
           <li className="rounded-tile border border-line p-3">
             <span className="font-semibold text-ink">Reference: NASA Human Research Program.</span>{" "}

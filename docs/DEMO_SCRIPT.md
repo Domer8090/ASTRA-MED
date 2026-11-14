@@ -87,8 +87,13 @@ Tab 2, Scenario B, day 104. This is the trend-watch moment.
    (`> 85 bpm`) and its provenance tag **SUPPLIED PROTOTYPE**.
    > "Every recommendation shows its rule and where the rule came from. These
    > are prototype thresholds, not NASA flight rules."
-7. Optional, if time allows: click **Log**, enter heart rate 72, save. The
-   status, charts and readiness recalculate at once.
+7. Optional, if time allows: click **Log**, enter resting heart rate **110**,
+   save. Status turns **CRITICAL** at once, with "contact the medical officer
+   when communication is available". Press **Undo** on the toast to remove it
+   (or, once the toast has gone, **Log** then **Remove** next to the entry).
+8. Optional: click **Report for flight surgeon** in the status band. It shows
+   the flagged indicators with their rules, trend watches, hazards and the last
+   7 days, ready to copy or save. Nothing is sent.
 
 ## 1:55 Act 3: solar particle event (50 s)
 
