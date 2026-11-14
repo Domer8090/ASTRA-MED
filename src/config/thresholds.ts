@@ -296,3 +296,28 @@ export const TREND_WATCH = {
   sleepWatchBelow: 6.5,
   provenance: "astra-assumption" as ThresholdProvenance,
 } as const;
+
+/**
+ * Baseline drift (Isolation Forest). Learns this astronaut's own pattern from
+ * earlier mission days and scores how unusual recent days look together.
+ * A drift score is an early-warning cue only and never changes a status.
+ */
+export const BASELINE_DRIFT = {
+  /** Days that define the personal baseline (mean and spread per feature). */
+  baselineDays: 14,
+  /** Recent days scored against the model; excluded from training. */
+  recentDays: 7,
+  /** Most recent training days used, to follow slow, expected adaptation. */
+  maxTrainingDays: 60,
+  minTrainingDays: 14,
+  trees: 120,
+  sampleSize: 32,
+  /** Isolation Forest score above which a day counts as unusual (0.5 is average). */
+  unusualScore: 0.6,
+  /** Unusual days needed within the recent window to raise a drift cue. */
+  minUnusualDays: 3,
+  /** A feature is named as a driver when its recent mean sits this many baseline SDs away. */
+  driverZ: 1.5,
+  seed: 20261114,
+  provenance: "astra-assumption" as ThresholdProvenance,
+} as const;

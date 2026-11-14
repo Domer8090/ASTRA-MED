@@ -144,6 +144,34 @@ export const REFERENCE_SOURCES: SourceEntry[] = [
     description: "JPL summary of the RAD cruise result: an average galactic cosmic ray dose-equivalent rate of about 1.8 mSv per day inside the spacecraft, during low to moderate solar activity.",
     usedFor: "Cross-check for the synthetic dosimeter level (about 1.8 mSv/day, about 324 mSv over 180 days).",
   },
+  {
+    title: "Risk of Behavioral Conditions and Psychiatric Disorders",
+    url: "https://www.nasa.gov/reference/risk-of-behavioral-conditions-and-psychiatric-disorders/",
+    publisher: "NASA Human Research Program",
+    description: "Isolation and confinement can raise the risk of behavioural problems such as anxiety and depression; spacecraft windows and reminders of Earth can help reduce monotony.",
+    usedFor: "Tuesday's wellbeing guidance and the reason the Recharge deck opens on an Earth view.",
+  },
+  {
+    title: "Global Imagery Browse Services (GIBS)",
+    url: "https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api",
+    publisher: "NASA Earthdata",
+    description: "Daily global satellite imagery served as map layers. ASTRA-MED uses MODIS Terra corrected-reflectance true colour, Blue Marble Next Generation and VIIRS city lights.",
+    usedFor: "The Earth globe in Tuesday's Recharge deck: yesterday's real clouds, lit for the real Sun position now.",
+  },
+  {
+    title: "EPIC: Earth Polychromatic Imaging Camera",
+    url: "https://epic.gsfc.nasa.gov/about",
+    publisher: "NASA Goddard / NOAA DSCOVR",
+    description: "Full-disc photos of the sunlit Earth from the Sun–Earth L1 point, about 1.5 million km away, published several times a day.",
+    usedFor: "The latest whole-Earth photo beside the globe.",
+  },
+  {
+    title: "Isolation Forest (Liu, Ting and Zhou, 2008)",
+    url: "https://doi.org/10.1109/ICDM.2008.17",
+    publisher: "IEEE International Conference on Data Mining",
+    description: "Anomaly detection that isolates unusual points with random splits; unusual points need fewer splits.",
+    usedFor: "Baseline drift: scores recent days against the crew member's own earlier days. A cue, never a status.",
+  },
 ];
 
 export interface StudyNote {

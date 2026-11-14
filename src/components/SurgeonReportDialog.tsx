@@ -26,6 +26,7 @@ export function SurgeonReportDialog({ open, onClose }: { open: boolean; onClose:
             days: m.days,
             generatedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
             signalDelayMinutes: earthMarsLightMinutes(new Date()),
+            drift: m.drift,
           })
         : "",
     [open, m],

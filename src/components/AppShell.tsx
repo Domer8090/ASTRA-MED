@@ -6,6 +6,7 @@ import { AlertsPanel } from "./AlertsPanel";
 import { CountermeasureGamification } from "./CountermeasureGamification";
 import { DataSourcesModal } from "./DataSourcesModal";
 import { GuidanceDrawer } from "./GuidanceDrawer";
+import { HazardMap } from "./HazardMap";
 import { MeasurementForm } from "./MeasurementForm";
 import { MissionConsole } from "./console/MissionConsole";
 import { MissionTrack } from "./MissionTrack";
@@ -15,6 +16,9 @@ import { PanelBoundary } from "./shared/ErrorBoundary";
 import { SpaceWeatherPanel } from "./SpaceWeatherPanel";
 import { SpotlightTour } from "./SpotlightTour";
 import { TopTelemetryBar } from "./TopTelemetryBar";
+import { RechargeDeck } from "./recharge/RechargeDeck";
+import { TuesdayLauncher, TuesdayPanel } from "./tuesday/TuesdayPanel";
+import { MedicalContactDialog } from "./tuesday/MedicalContactDialog";
 
 function SystemNotices() {
   const storage = useMissionState((s) => s.storage);
@@ -68,6 +72,9 @@ export function AppShell() {
         <main id="main" tabIndex={-1} className="mx-auto flex max-w-[1760px] flex-col gap-3 px-3 py-3 outline-none md:px-4">
           <SystemNotices />
           <MissionConsole />
+          <PanelBoundary name="Hazards">
+            <HazardMap />
+          </PanelBoundary>
           <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(380px,1fr)]">
             <PanelBoundary name="Countermeasures">
               <CountermeasureGamification />
@@ -92,6 +99,10 @@ export function AppShell() {
       <MeasurementForm />
       <DataSourcesModal />
       <SpotlightTour />
+      <TuesdayLauncher />
+      <TuesdayPanel />
+      <RechargeDeck />
+      <MedicalContactDialog />
     </div>
   );
 }

@@ -19,6 +19,10 @@ export const COLORS = {
   nominal: "#22C55E",
   caution: "#F59E0B",
   critical: "#F43F5E",
+  tue: "#B9A6FF",
+  tueDeep: "#7461D8",
+  /** Bonus items in Tuesday's Orbit Catch game only. Never a status. */
+  gold: "#F5D06B",
 } as const;
 
 export const STATUS_COLOR: Record<HealthStatus, string> = {

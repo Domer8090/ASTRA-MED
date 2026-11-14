@@ -2,7 +2,7 @@
   "name": "astra-med",
   "private": true,
   "version": "1.0.0",
-  "description": "ASTRA-MED \u2014 offline-first astronaut health monitoring console (NASA Space Apps Challenge 2026 prototype)",
+  "description": "ASTRA-MED — offline-first astronaut health monitoring console (NASA Space Apps Challenge 2026 prototype)",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -14,23 +14,27 @@
     "check": "npm run typecheck && npm run lint && npm run test",
     "donki:fallback": "node scripts/build-donki-fallback.mjs",
     "donki:check": "node scripts/check-donki.mjs",
-    "qa:screenshots": "node scripts/qa-screenshots.mjs"
+    "qa:screenshots": "node scripts/qa-screenshots.mjs",
+    "assets:fetch": "node scripts/fetch-offline-assets.mjs"
   },
   "dependencies": {
     "@fontsource/barlow": "^5.3.0",
     "@fontsource/barlow-semi-condensed": "^5.3.0",
     "@fontsource/ibm-plex-mono": "^5.3.0",
+    "@mediapipe/tasks-vision": "1.2.0",
     "lucide-react": "^1.72.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "react-is": "^18.3.1",
-    "recharts": "^3.10.1"
+    "recharts": "^3.10.1",
+    "three": "0.186.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/node": "^24.0.0",
     "@types/react": "^18.3.31",
     "@types/react-dom": "^18.3.7",
+    "@types/three": "0.186.0",
     "@vitejs/plugin-react": "^6.3.0",
     "autoprefixer": "^10.6.2",
     "eslint": "^10.15.0",

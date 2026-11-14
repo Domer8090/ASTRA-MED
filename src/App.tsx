@@ -6,6 +6,7 @@ import { OnboardingProvider } from "./hooks/useOnboarding";
 import { MissionStoreContext } from "./hooks/useMissionState";
 import { SpaceWeatherProvider } from "./hooks/useSpaceWeather";
 import { ToastProvider } from "./hooks/useToast";
+import { TuesdayProvider } from "./hooks/useTuesday";
 import { UiProvider } from "./hooks/useUi";
 import { STORAGE_KEYS } from "./services/storageService";
 import type { MissionStore } from "./state/missionStore";
@@ -31,7 +32,9 @@ export default function App({ store }: { store: MissionStore }) {
             <UiProvider>
               <OnboardingProvider>
                 <MissionModelProvider>
-                  <AppShell />
+                  <TuesdayProvider>
+                    <AppShell />
+                  </TuesdayProvider>
                 </MissionModelProvider>
               </OnboardingProvider>
             </UiProvider>

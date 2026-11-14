@@ -21,6 +21,7 @@ npm run build      # production build into dist/
 npm run preview    # serve dist/ (service worker active here only)
 npm run donki:check      # live per-endpoint DONKI check (both hosts)
 npm run qa:screenshots   # CDP screenshots of every major view into docs/qa (needs preview running)
+npm run assets:fetch     # NASA Earth textures and the hand-tracking model into public/ (offline Recharge deck)
 ```
 
 ## Non-negotiable product rules
@@ -45,6 +46,9 @@ npm run qa:screenshots   # CDP screenshots of every major view into docs/qa (nee
    current session; otherwise `CACHED`, `ARCHIVED` or `UNAVAILABLE` (see
    DATA_SOURCES.md §3). Scenario events are labelled `SCENARIO SIMULATION`; the
    scenario C dosimeter overlay is documented in `src/data/scenarioHazards.ts`.
+14. Every Tuesday model answer passes `safetyFilter` before it is shown or
+    stored. Crisis messages always get the fixed `CRISIS_REPLY`, never a model
+    answer alone.
 12. Every recommendation carries a `RecommendationBasis` (indicator, rule,
     provenance, reference or "no source"). Show it with `BasisLine`.
 13. Mission time: day N = MET (N−1)/00:00–23:59 ship time (UTC). Use
@@ -52,7 +56,12 @@ npm run qa:screenshots   # CDP screenshots of every major view into docs/qa (nee
 8. The app must load, log, recalculate and chart with no network and no API
    key. API failure must never throw into the UI.
 9. Health data stays in the browser. Never send measurements anywhere and
-   never `console.log` measurement values.
+   never `console.log` measurement values. The one exception is Tuesday's
+   on-device model: `src/services/localModel.ts` may send the health brief and
+   attached images to `localhost` only, and must refuse any other host.
+   Camera frames for hand tracking are never sent. Assume no internet in
+   flight: Recharge-deck assets ship in `public/`; network-only extras (the
+   EPIC photo) must be optional and say so.
 10. Never commit a personal NASA API key. `VITE_` variables are public in the
     bundle; `DEMO_KEY` is the fallback.
 11. No dead buttons, placeholder charts, fake loading or TODO-only features.

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { BookOpenCheck, Clock3, FileText, Radiation, RadioTower, Sun } from "lucide-react";
+import { BookOpenCheck, Clock3, FileText, Radiation, RadioTower, Stethoscope, Sun } from "lucide-react";
 import { STATUS_TEXT_CLASS } from "../../config/theme";
 import { BODY_SYSTEMS } from "../../data/bodySystems";
 import { METRIC_GUIDANCE } from "../../data/metricGuidance";
@@ -12,6 +12,7 @@ import { capitalize, formatNumber } from "../../utils/formatting";
 import { earthMarsLightMinutes } from "../../engine/lightTime";
 import { useCmeForecast } from "../../hooks/useCmeForecast";
 import { useNow } from "../../hooks/useNow";
+import { useTuesday } from "../../hooks/useTuesday";
 import { nextArrival } from "../../services/enlilForecast";
 import { scrollToSection } from "../navigation";
 import { TrendChip } from "../shared/TrendChip";
@@ -116,6 +117,7 @@ export function StatusLine() {
   const { focusSystem } = useConsoleFocus();
   const { openGuidance, followPriority } = useUiActions();
   const [reportOpen, setReportOpen] = useState(false);
+  const { openContact } = useTuesday();
   const watch = systems[priority.id];
   const activeHazard = advisories.find((a) => a.level !== "ALL CLEAR");
   const needsWatch = watch.status !== "NOMINAL" || Boolean(activeHazard);
@@ -234,7 +236,15 @@ export function StatusLine() {
           </span>
           <MarsCmeNotice />
           <SignalDelay />
-          <button type="button" className="btn btn-ghost ml-auto min-h-[32px] px-2 text-xs" onClick={() => setReportOpen(true)}>
+          <button
+            type="button"
+            className={`btn ml-auto min-h-[32px] px-2 text-xs ${overall.status === "CRITICAL" ? "btn-danger" : "btn-ghost"}`}
+            onClick={() => openContact({ priority: overall.status === "CRITICAL" ? "urgent" : "routine", report: "" })}
+          >
+            <Stethoscope aria-hidden="true" className="h-3.5 w-3.5" />
+            Contact medical officer
+          </button>
+          <button type="button" className="btn btn-ghost min-h-[32px] px-2 text-xs" onClick={() => setReportOpen(true)}>
             <FileText aria-hidden="true" className="h-3.5 w-3.5" />
             Report for flight surgeon
           </button>

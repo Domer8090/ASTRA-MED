@@ -18,6 +18,7 @@ export const STORAGE_KEYS = {
   donkiCache: "astra-med:v1:donki-cache",
   enlilCache: "astra-med:v1:enlil-cache",
   onboarding: "astra-med:v1:onboarding",
+  tuesday: "astra-med:v1:tuesday",
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

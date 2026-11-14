@@ -1,7 +1,8 @@
-import { Activity, BellRing, BookOpen, CloudSun, LineChart, ListChecks, PersonStanding } from "lucide-react";
+import { Activity, BellRing, BookOpen, CloudSun, LineChart, ListChecks, PersonStanding, ShieldAlert } from "lucide-react";
 
 export const NAV_ITEMS = [
   { id: "overview", label: "Medical console: crew health and body systems", short: "Console", icon: PersonStanding },
+  { id: "hazards", label: "Five hazards of human spaceflight", short: "Hazards", icon: ShieldAlert },
   { id: "trends", label: "Trends", short: "Trends", icon: LineChart },
   { id: "countermeasures", label: "Countermeasures", short: "Tasks", icon: ListChecks },
   { id: "alerts", label: "Alerts and health events", short: "Alerts", icon: BellRing },

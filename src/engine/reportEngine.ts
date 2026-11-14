@@ -5,6 +5,7 @@
  */
 import { BODY_SYSTEMS } from "../data/bodySystems";
 import { METRIC_GUIDANCE } from "../data/metricGuidance";
+import type { BaselineDrift } from "./baselineEngine";
 import type {
   BodySystemId,
   BodySystemState,
@@ -34,6 +35,8 @@ export interface ReportInput {
   days: readonly EffectiveDay[];
   generatedAt: string;
   signalDelayMinutes: number;
+  /** Isolation Forest pattern check; optional so older callers still work. */
+  drift?: BaselineDrift;
 }
 
 const WINDOW = 7;
@@ -79,6 +82,15 @@ export function buildSurgeonReport(i: ReportInput): string {
   push("", "TREND WATCH (projections, not diagnoses)");
   if (!i.trends.length) push("- None.");
   for (const t of i.trends) push(`- ${t.text}`);
+
+  if (i.drift) {
+    push("", "BASELINE DRIFT (Isolation Forest against this crew member's own earlier days; a cue, not a diagnosis)");
+    if (i.drift.state === "insufficient") push(`- ${i.drift.text}`);
+    else {
+      push(`- ${i.drift.unusualDays} of the last ${i.drift.scores.length} days scored as unusual (training days ${i.drift.trainingDays?.join("–") ?? "n/a"}, baseline days ${i.drift.baselineDays.join("–")}).`);
+      for (const d of i.drift.drivers) push(`- ${d.text}`);
+    }
+  }
 
   push("", "ENVIRONMENTAL HAZARDS (not personal dose)");
   if (!i.advisories.length) push("- None active.");

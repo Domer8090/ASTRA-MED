@@ -74,6 +74,10 @@ CCMC DONKI host, which needs no key.
 | Trends | 7 Recharts views, 7/30/90/180-day windows, reference bands, CAUTION periods, manual-entry markers |
 | Countermeasures | Daily tasks, XP once per task per day, streak, undo, follow-up actions |
 | Space weather | DONKI FLR, SEP, CME and notifications; LIVE, PARTIAL, CACHED or DEMO / OFFLINE FALLBACK |
+| Five hazards | NASA HRP's five hazards of human spaceflight, each tied to today's engine status and an action: space radiation (dosimeter, space weather), isolation and confinement (Tuesday), distance from Earth (signal delay, ground link, medical-officer contact), gravity fields (heart, bone, eyes), hostile and closed environments (temperature, fluids, glucose) |
+| Contact medical officer | From the status band, Tuesday or the hazard map. Builds a message from the crew member's words and engine output. With a ground link the crew copies it into mission comms; with no link Tuesday lists on-board steps and queues it on the device |
+| Tuesday | Crew companion: chat grounded in the onboard protocol library, mood and energy check-ins, Isolation Forest baseline drift, optional on-device model (Ollama) for conversation, photos and lab reports |
+| Recharge deck | NASA Earth globe (yesterday's GIBS imagery, real day–night line, EPIC photo), Orbit Catch, paced breathing; optional camera hand control |
 | Data sources | Verified references, OSDR study notes, thresholds table, data labels, storage, plan targets, reset |
 
 Scenarios: **A** nominal (day 42), **B** cardiovascular caution (day 118),
@@ -94,6 +98,20 @@ src/hooks      React bindings and providers
 src/components presentation only
 ```
 
+## Tuesday and the on-device model
+
+Tuesday works with no model at all. For natural conversation, photo review and
+lab-report reading, run a model on the same machine with
+[Ollama](https://ollama.com):
+
+```bash
+ollama pull qwen3:8b
+```
+
+For photos and lab reports, also install a MedGemma 1.5 4B build and pick it in
+Tuesday's settings. Tuesday only talks to `localhost`; health data, photos and
+camera frames never leave the device.
+
 ## Known limitations
 
 - All health data is synthetic or entered by hand; there is no device integration.
@@ -104,6 +122,14 @@ src/components presentation only
   not current conditions.
 - Live DONKI data describes the near-Earth environment, not the demo spacecraft.
 - One demo crew identity; no multi-crew support.
+- Tuesday is a prototype companion, not a counsellor or medical device. A
+  local model can still be wrong; the safety filter removes medication,
+  diagnosis and exercise-change sentences but does not check facts.
+- The dataset has no heart-rate variability, so baseline drift uses heart
+  rate, blood pressure, temperature, sleep and mood.
+- Everything in Tuesday works with no network except the optional EPIC photo,
+  which appears only when a ground link is available. Earth textures and the
+  hand-tracking model ship in `public/` (`npm run assets:fetch` refreshes them).
 
 ## Public build
 

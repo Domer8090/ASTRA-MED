@@ -12,6 +12,8 @@ export default {
         ink: { DEFAULT: "#E8F0FA", 2: "#91A4BA", 3: "#647A93" },
         cyan: { DEFAULT: "#42D9F5", deep: "#1B8FA6" },
         blue: { DEFAULT: "#4C8DFF" },
+        /* Tuesday, the crew companion. Kept apart from status colours and the clinical cyan. */
+        tue: { DEFAULT: "#B9A6FF", deep: "#7461D8" },
         nominal: "#22C55E",
         caution: "#F59E0B",
         critical: "#F43F5E",

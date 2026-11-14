@@ -192,6 +192,23 @@ Defined in `src/data/scenarioHazards.ts` and evaluated by `src/engine/advisoryEn
 
 The flight-surgeon report (`src/engine/reportEngine.ts`) is built on the device from the same engine output. It is shown, copied or saved as a `.txt` file only when the crew chooses; nothing is transmitted.
 
+## 3d. Tuesday, the crew companion (added 2026-11-14)
+
+| Data | Source | How it is used | Label |
+| --- | --- | --- | --- |
+| Baseline drift | ASTRA-MED engine (`src/engine/baselineEngine.ts`): Isolation Forest (Liu, Ting and Zhou 2008), 120 trees, trained on the crew member's own days before the last 7 (up to 60 days); features standardised against the first 14 mission days | Tuesday's pattern check and the flight-surgeon report. Flags a drift when at least 3 of the last 7 days score 0.6 or more and an indicator sits 1.5 baseline SD away. Fires on day 109 in Scenario B (CAUTION follows on day 112) and never in Scenarios A or C. Parameters in `BASELINE_DRIFT`, tagged `astra-assumption`. Never changes a status. | Pattern check |
+| Protocol library for answers | ASTRA-MED's own guidance, hazard, protective-step, task, wellbeing and source text (`src/data/knowledgeBase.ts`), BM25 keyword retrieval in the browser | Grounds Tuesday's answers; cited as [1], [2]. This is not an official NASA checklist or ISS medical procedure; those are not public. | Source links |
+| Wellbeing guidance | NASA HRP *Risk of Behavioral Conditions and Psychiatric Disorders*, *Risk of Inadequate Teamwork*, *Risk from Inadequate Sleep* (paraphrased in `src/data/wellbeingGuides.ts`) | Tuesday's replies about boredom, tiredness, loneliness and stress | Reference |
+| Earth globe imagery | NASA GIBS `BlueMarble_NextGeneration` and `VIIRS_CityLights_2012`, 4096 × 2048, saved into `public/earth` by `npm run assets:fetch` and shipped with the app | Recharge deck globe; works with no network. The day–night line uses the real subsolar point (`src/engine/sunPosition.ts`). | Bundled, works offline |
+| Whole-Earth photo | NASA EPIC on DSCOVR (`https://epic.gsfc.nasa.gov/api/natural`) | Optional. Shown only when a ground link is available; otherwise the panel says there is no link. | Photo date shown |
+| Hand tracking | MediaPipe Hand Landmarker (Google). The WebAssembly runtime is copied from `node_modules/@mediapipe/tasks-vision@1.2.0` by `vite.config.ts`; the model is saved into `public/models` by `npm run assets:fetch` | Optional hand control in the Recharge deck. Works with no network. Camera frames are processed in the browser and never sent. | Hand control status |
+| Typed readings | ASTRA-MED engine (`readingsInText` in `src/engine/tuesdayEngine.ts`), same prototype thresholds as logged readings | A heart rate, blood pressure, temperature or glucose typed into a message is checked before any model sees it. CAUTION or CRITICAL values, and red-flag symptoms such as chest pain or fainting, get a fixed reply that says to repeat the measurement and, if CRITICAL or symptomatic, to tell a crewmate and use the urgent channel. | CAUTION / CRITICAL |
+| Conversation and image models | A model the crew member runs on the same device with Ollama (Qwen3 8B for conversation, MedGemma 1.5 4B for photos and lab reports recommended) | Tuesday sends the health brief, retrieved passages and attached images only to `localhost`; any other host is refused in code. Every answer passes a safety filter that removes medication, dose, diagnosis and exercise-change sentences. Without a model, Tuesday answers from onboard rules. | On-device model or Onboard rules |
+
+The five-hazard map (`src/engine/hazardMap.ts`) reuses engine statuses only and adds no thresholds. Messages for the medical officer (`src/engine/medicalContact.ts`) are built on the device; queued ones are stored in `astra-med:v1:tuesday` and never sent by the app.
+
+Tuesday's conversation, check-ins and activity log are stored in this browser only (`astra-med:v1:tuesday`). A check-in also logs the day's mood reading, so it feeds the normal engines.
+
 ## 4. Diagnostic thresholds
 
 All thresholds live in `src/config/thresholds.ts`, each tagged with its
