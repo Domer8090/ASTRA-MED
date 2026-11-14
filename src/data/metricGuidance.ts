@@ -3,7 +3,24 @@
  * Educational prototype content. It does not replace mission-approved
  * procedures, device instructions or advice from qualified medical personnel.
  */
-import type { MetricGuidance, MetricId } from "../types/health";
+import type { MetricGuidance, MetricId, SourceRef } from "../types/health";
+
+const FITNESS_RISK: SourceRef = {
+  label: "NASA HRP: Risk of Reduced Cardiorespiratory and Musculoskeletal Fitness",
+  url: "https://www.nasa.gov/reference/risk-of-reduced-cardiorespiratory-and-musculoskeletal-fitness/",
+};
+const SLEEP_RISK: SourceRef = {
+  label: "NASA HRP: Risk from Inadequate Sleep and Irregular Schedules",
+  url: "https://www.nasa.gov/reference/risk-from-inadequate-sleep-and-irregular-schedules/",
+};
+const SANS_RISK: SourceRef = {
+  label: "NASA HRP: Risk of Spaceflight Associated Neuro-ocular Syndrome (SANS)",
+  url: "https://www.nasa.gov/reference/risk-of-spaceflight-associated-neuro-ocular-syndrome-sans/",
+};
+const MSL_RAD: SourceRef = {
+  label: "Zeitlin et al. 2013, Science 340:1080 (MSL/RAD cruise dose, about 1.8 mSv/day)",
+  url: "https://doi.org/10.1126/science.1235989",
+};
 
 export const GUIDANCE_DISCLAIMER =
   "Educational prototype content. These steps do not replace mission-approved procedures, device instructions or advice from qualified medical personnel.";
@@ -33,6 +50,7 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
       "If a repeated reading stays outside the configured range, follow the mission-approved cardiovascular protocol and note it for the medical officer.",
     trendTab: "heartRate",
     system: "cardiovascular",
+    reference: FITNESS_RISK,
   },
   bloodPressure: {
     metricId: "bloodPressure",
@@ -61,6 +79,7 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
       "If repeated readings stay outside the configured range, review the mission-approved cardiovascular protocol and record the readings for the flight surgeon.",
     trendTab: "bloodPressure",
     system: "cardiovascular",
+    reference: FITNESS_RISK,
   },
   bloodGlucose: {
     metricId: "bloodGlucose",
@@ -85,6 +104,7 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
     nextStep: "Follow the mission-approved protocol for unusual results and note the timing context.",
     trendTab: "bloodGlucose",
     system: "metabolicCircadian",
+    reference: null,
   },
   bodyTemperature: {
     metricId: "bodyTemperature",
@@ -109,6 +129,7 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
       "If a repeated reading stays outside the configured range, record symptoms and follow the mission-approved illness protocol.",
     trendTab: "bodyTemperature",
     system: "metabolicCircadian",
+    reference: null,
   },
   sleep: {
     metricId: "sleep",
@@ -132,6 +153,7 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
       "If sleep stays short for consecutive days, review the approved sleep routine and the schedule with the medical officer.",
     trendTab: "sleepMood",
     system: "neuroOcular",
+    reference: SLEEP_RISK,
   },
   mood: {
     metricId: "mood",
@@ -155,6 +177,7 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
       "If scores stay low for several days, use the mission's approved behavioural-health resources and talk with the medical officer when communication is available.",
     trendTab: "sleepMood",
     system: "metabolicCircadian",
+    reference: SLEEP_RISK,
   },
   aredMinutes: {
     metricId: "aredMinutes",
@@ -180,6 +203,7 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
       "Do not increase intensity or duration based on this app. Follow the approved exercise plan and report missed sessions.",
     trendTab: "ared",
     system: "musculoskeletal",
+    reference: FITNESS_RISK,
   },
   radiation: {
     metricId: "radiation",
@@ -204,6 +228,7 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
       "Review the space-weather status. Follow the approved radiation protection and shelter procedure when directed.",
     trendTab: "radiation",
     system: "immuneRadiation",
+    reference: MSL_RAD,
   },
   pvt: {
     metricId: "pvt",
@@ -223,8 +248,9 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
     whenToRepeat: "At the scheduled interval (every third day in this demo plan).",
     whatToRecord: ["Mean reaction time (ms)", "Lapses if reported", "Time of day"],
     nextStep: "If reaction time stays slower than your baseline, review sleep and workload with the medical officer.",
-    trendTab: null,
+    trendTab: "pvtHydration",
     system: "neuroOcular",
+    reference: SLEEP_RISK,
   },
   hydration: {
     metricId: "hydration",
@@ -242,8 +268,9 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
     whenToRepeat: "Once per day.",
     whatToRecord: ["Total litres", "Anything unusual such as illness"],
     nextStep: "If intake stays below the mission plan, review the hydration plan.",
-    trendTab: null,
+    trendTab: "pvtHydration",
     system: "metabolicCircadian",
+    reference: null,
   },
   symptoms: {
     metricId: "symptoms",
@@ -267,5 +294,6 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
     nextStep: "If a symptom is new or worsening, follow the mission protocol and note it for the medical officer.",
     trendTab: null,
     system: "neuroOcular",
+    reference: SANS_RISK,
   },
 };

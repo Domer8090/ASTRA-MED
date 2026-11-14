@@ -16,6 +16,7 @@ import type {
   FollowUpAction,
   MetricDiagnostic,
   MetricId,
+  ReadinessComponent,
   ReadinessSummary,
   ScenarioId,
   TaskCompletionRecord,
@@ -92,6 +93,7 @@ export function tasksForDay(input: ReadinessInput, day: number): CountermeasureT
       ...(via ? { via } : {}),
       ...(t.linkedMetric ? { linkedMetric: t.linkedMetric } : {}),
       guidance: t.guidance,
+      systems: t.systems,
     };
   });
 }
@@ -136,6 +138,9 @@ export function weeklyAdherence(input: ReadinessInput, day: number): number {
   return sum / (day - start + 1);
 }
 
+/** Points available to each part of the readiness score. They add up to 100 (ASTRA assumption). */
+export const READINESS_WEIGHTS = { tasks: 50, weekly: 20, followUps: 15, freshness: 15 } as const;
+
 function message(score: number, completed: number, total: number): string {
   if (total > 0 && completed === total) return "Every scheduled countermeasure is complete for today.";
   if (score >= 85) return "Countermeasures are on track. Keep the routine going.";
@@ -156,9 +161,26 @@ export function computeReadiness(
   const weekly = weeklyAdherence(input, day);
   const followUpCompletion = followUps.length ? followUps.filter((f) => f.completed).length / followUps.length : 1;
   const fresh = PRIMARY_METRIC_IDS.filter((id) => diagnostics[id].freshness === "current").length / PRIMARY_METRIC_IDS.length;
-  const score = Math.round(50 * taskCompletion + 20 * weekly + 15 * followUpCompletion + 15 * fresh);
+  const followUpsDone = followUps.filter((f) => f.completed).length;
+  const freshCount = PRIMARY_METRIC_IDS.filter((id) => diagnostics[id].freshness === "current").length;
+  const part = (id: ReadinessComponent["id"], label: string, fraction: number, detail: string): ReadinessComponent => ({
+    id,
+    label,
+    weight: READINESS_WEIGHTS[id],
+    fraction,
+    points: READINESS_WEIGHTS[id] * fraction,
+    detail,
+  });
+  const components = [
+    part("tasks", "Today's countermeasure tasks", taskCompletion, `${completedTasks} of ${tasks.length} done`),
+    part("weekly", "7-day task adherence", weekly, `${Math.round(weekly * 100)}% average over the last ${Math.min(7, day)} days`),
+    part("followUps", "Follow-up actions done", followUpCompletion, followUps.length ? `${followUpsDone} of ${followUps.length} done` : "none needed today, full points"),
+    part("freshness", "Fresh required measurements", fresh, `${freshCount} of ${PRIMARY_METRIC_IDS.length} current`),
+  ];
+  const score = Math.round(components.reduce((sum, c) => sum + c.points, 0));
   return {
     score,
+    components,
     taskCompletion,
     weeklyAdherence: weekly,
     followUpCompletion,

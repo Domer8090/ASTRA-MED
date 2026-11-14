@@ -16,11 +16,18 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import { COLORS } from "../../config/theme";
-import type { ChartRow, StatusPeriod } from "../../services/chartSeries";
+import type { ChartRow, EventAnnotation, StatusPeriod } from "../../services/chartSeries";
 import type { HealthStatus } from "../../types/health";
 import { padDay } from "../../utils/dates";
 import { formatNumber } from "../../utils/formatting";
 import type { TabDef } from "./trendTabs";
+
+const ANNOTATION_COLOR: Record<EventAnnotation["kind"], string> = {
+  health: "#F8C36B",
+  environment: COLORS.blue,
+  operations: COLORS.ink2,
+  manual: COLORS.cyan,
+};
 
 const PERIOD_FILL: Record<Exclude<HealthStatus, "NOMINAL">, string> = { CAUTION: COLORS.caution, CRITICAL: COLORS.critical };
 
@@ -57,6 +64,7 @@ const TrendChart = memo(function TrendChart({
   day,
   range,
   target,
+  annotations,
   onPick,
 }: {
   tab: TabDef;
@@ -65,6 +73,7 @@ const TrendChart = memo(function TrendChart({
   day: number;
   range: [number, number];
   target?: number;
+  annotations: EventAnnotation[];
   onPick: (d: number) => void;
 }) {
   const hasRight = tab.series.some((s) => s.axis === "right");
@@ -133,6 +142,34 @@ const TrendChart = memo(function TrendChart({
             label={p.end - p.start >= 2 || range[1] - range[0] <= 31 ? { value: p.status, position: "insideTop", fill: PERIOD_FILL[p.status], fontSize: 10, fontFamily: "Barlow Semi Condensed", fontWeight: 700 } : undefined}
           />
         ))}
+        {annotations.map((a, i) =>
+          a.end > a.start ? (
+            <ReferenceArea
+              key={`ev-${a.id}`}
+              yAxisId="left"
+              x1={a.start - 0.5}
+              x2={a.end + 0.5}
+              fill={ANNOTATION_COLOR[a.kind]}
+              fillOpacity={0.06}
+              stroke={ANNOTATION_COLOR[a.kind]}
+              strokeOpacity={0.5}
+              strokeDasharray="2 3"
+              ifOverflow="hidden"
+              label={{ value: a.label, position: i % 2 ? "insideBottomLeft" : "insideBottomRight", fill: ANNOTATION_COLOR[a.kind], fontSize: 10, fontFamily: "Barlow Semi Condensed" }}
+            />
+          ) : (
+            <ReferenceLine
+              key={`ev-${a.id}`}
+              yAxisId="left"
+              x={a.start}
+              stroke={ANNOTATION_COLOR[a.kind]}
+              strokeDasharray="2 3"
+              strokeOpacity={0.8}
+              ifOverflow="hidden"
+              label={{ value: a.label.length > 22 ? `${a.label.slice(0, 21)}…` : a.label, position: "insideTopLeft", fill: ANNOTATION_COLOR[a.kind], fontSize: 10, fontFamily: "Barlow Semi Condensed", offset: 4 }}
+            />
+          ),
+        )}
         {tab.bands.map((b, i) => (
           <ReferenceArea
             key={b.label}
@@ -174,7 +211,7 @@ const TrendChart = memo(function TrendChart({
           ) : s.kind === "area" ? (
             <Area key={s.key} yAxisId={s.axis ?? "left"} type="monotone" dataKey={s.key} name={`${s.name} (${s.unit})`} stroke={s.color} fill={s.color} fillOpacity={0.08} strokeWidth={1.75} dot={false} isAnimationActive={false} connectNulls={false} />
           ) : (
-            <Line key={s.key} yAxisId={s.axis ?? "left"} type="monotone" dataKey={s.key} name={`${s.name} (${s.unit})`} stroke={s.color} strokeWidth={1.75} dot={false} activeDot={{ r: 3.5 }} isAnimationActive={false} connectNulls={false} />
+            <Line key={s.key} yAxisId={s.axis ?? "left"} type="monotone" dataKey={s.key} name={`${s.name} (${s.unit})`} stroke={s.color} strokeWidth={1.75} dot={false} activeDot={{ r: 3.5 }} isAnimationActive={false} connectNulls={s.key === "pvt"} />
           ),
         )}
         {tab.series

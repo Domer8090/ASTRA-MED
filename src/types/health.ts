@@ -73,8 +73,10 @@ export interface VitalMeasurement {
   value: MeasurementValue;
   unit: string;
   missionDay: number;
-  /** ISO 8601, UTC. */
+  /** ISO 8601, UTC, on the mission timeline (fictional epoch): mission day + ship time. */
   recordedAt: string;
+  /** Real wall-clock time the entry was typed (ISO UTC). Audit only. */
+  enteredAt?: string;
   source: MeasurementSource;
   notes?: string;
   glucoseContext?: GlucoseContext;
@@ -135,6 +137,22 @@ export interface RuleTrace {
 
 export type Freshness = "current" | "stale" | "missing";
 
+export interface SourceRef {
+  label: string;
+  url: string;
+}
+
+export type BasisProvenance = ThresholdProvenance | "scenario-simulation" | "routine";
+
+/** Why a recommendation exists: which indicator, which configured rule, and what (if anything) backs it. */
+export interface RecommendationBasis {
+  indicator: string;
+  rule: string;
+  provenance: BasisProvenance;
+  reference: SourceRef | null;
+  referenceNote: string;
+}
+
 export interface MetricDiagnostic {
   metricId: MetricId;
   status: HealthStatus;
@@ -155,14 +173,35 @@ export interface MetricDiagnostic {
   triggeredRules: RuleTrace[];
   /** Short notes that do not change status, e.g. "above reference, below caution". */
   notes: string[];
+  basis: RecommendationBasis;
 }
 
 export type AdvisorySource = "scenario" | "donki";
 
+export type HazardLevel = "WATCH" | "WARNING" | "ALL CLEAR";
+
+export interface ProtectiveAction {
+  id: string;
+  text: string;
+  systems: BodySystemId[];
+  basis: RecommendationBasis;
+}
+
+export interface SystemRelation {
+  id: BodySystemId;
+  relation: "Direct" | "Indirect" | "Operational";
+  text: string;
+  indicators: MetricId[];
+}
+
+/** Environmental hazard assessment. Never a dose and never merged into health status. */
 export interface EnvironmentAdvisory {
   id: string;
   source: AdvisorySource;
-  severity: Exclude<HealthStatus, "NOMINAL">;
+  /** CAUTION for WATCH or WARNING; NOMINAL for ALL CLEAR. */
+  severity: HealthStatus;
+  level: HazardLevel;
+  phase: string;
   title: string;
   summary: string;
   whyItMatters: string;
@@ -170,6 +209,9 @@ export interface EnvironmentAdvisory {
   provenanceLabel: string;
   startTime?: string;
   missionDayRange?: [number, number];
+  relations: SystemRelation[];
+  actions: ProtectiveAction[];
+  basis: RecommendationBasis;
 }
 
 export type BodySystemId =
@@ -194,7 +236,8 @@ export type TrendTabId =
   | "bodyTemperature"
   | "sleepMood"
   | "ared"
-  | "radiation";
+  | "radiation"
+  | "pvtHydration";
 
 export interface BodySystemDefinition {
   id: BodySystemId;
@@ -235,6 +278,8 @@ export interface MetricGuidance {
   nextStep: string;
   trendTab: TrendTabId | null;
   system: BodySystemId;
+  /** Scientific context for this indicator, or null when none was verified. Context never validates a threshold. */
+  reference: SourceRef | null;
 }
 
 export type GuidanceRef =
@@ -258,6 +303,8 @@ export interface CountermeasureTaskDefinition {
   timing: "morning" | "day" | "evening";
   /** Scheduled every N days starting on day 1. Omitted means daily. */
   everyNDays?: number;
+  /** Body systems this countermeasure supports. */
+  systems: BodySystemId[];
 }
 
 export type CompletionVia = "checkbox" | "measurement" | "seed";
@@ -284,20 +331,38 @@ export interface CountermeasureTask {
   via?: CompletionVia;
   linkedMetric?: MetricId;
   guidance: GuidanceRef;
+  systems: BodySystemId[];
 }
 
 export type FollowUpKind = "metric" | "missed-task" | "advisory";
 
+/** One ordered step of a protective action sequence. Completion is tracked per step. */
+export interface FollowUpStep {
+  id: string;
+  text: string;
+  systems: BodySystemId[];
+  basis: RecommendationBasis;
+  completed: boolean;
+  completedAt?: string;
+  /** Other alerts this step also addresses, e.g. the dosimeter CAUTION during an SEP. */
+  alsoResolves?: string;
+}
+
 export interface FollowUpAction {
   id: string;
   kind: FollowUpKind;
+  /** Body systems the follow-up relates to. */
+  systems: BodySystemId[];
   severity: HealthStatus;
   title: string;
   reason: string;
   action: string;
   guidance: GuidanceRef;
+  basis: RecommendationBasis;
   completed: boolean;
   completedAt?: string;
+  /** Present for protective action sequences: ordered steps, highest priority first. */
+  steps?: FollowUpStep[];
 }
 
 export type ScenarioId = "nominal" | "cardiovascular" | "sep";
@@ -309,6 +374,8 @@ export interface ScenarioEvent {
   endDay: number;
   kind: "health" | "environment" | "operations";
   description: string;
+  /** Metrics this event is annotated on in trend charts. */
+  metrics: MetricId[];
 }
 
 export interface ScenarioDefinition {
@@ -317,6 +384,8 @@ export interface ScenarioDefinition {
   name: string;
   summary: string;
   focusDay: number;
+  /** Mission days where the scenario's story is visible; null for the nominal scenario. */
+  storyDays: [number, number] | null;
   events: ScenarioEvent[];
 }
 
@@ -331,8 +400,22 @@ export interface MissionSettings {
   trendTab: TrendTabId;
 }
 
+export interface ReadinessComponent {
+  id: "tasks" | "weekly" | "followUps" | "freshness";
+  label: string;
+  /** Maximum points this part can add to the score. */
+  weight: number;
+  /** 0 to 1. */
+  fraction: number;
+  /** weight × fraction, unrounded. */
+  points: number;
+  detail: string;
+}
+
 export interface ReadinessSummary {
   score: number;
+  /** The four weighted parts that add up to the score, in display order. */
+  components: ReadinessComponent[];
   taskCompletion: number;
   weeklyAdherence: number;
   followUpCompletion: number;
@@ -355,7 +438,12 @@ export interface OverallStatus {
 /* ---------------- NASA DONKI ---------------- */
 
 export type DonkiEventType = "FLR" | "SEP" | "CME" | "NOTIFICATION";
-export type DonkiDataSource = "live" | "cached" | "fallback";
+/**
+ * live: received in a successful response during this browser session.
+ * cached: received in an earlier session and read back from localStorage.
+ * archived: bundled historical DONKI records (2024-05-08 to 2024-05-16).
+ */
+export type DonkiDataSource = "live" | "cached" | "archived";
 export type DonkiHost = "api.nasa.gov" | "ccmc.gsfc.nasa.gov";
 
 export interface DonkiDetail {
@@ -378,20 +466,42 @@ export interface DonkiEvent {
   linkedIds: string[];
 }
 
+export interface DonkiAttempt {
+  host: DonkiHost;
+  /** HTTP status when a response arrived; absent for network errors and timeouts. */
+  status?: number;
+  error?: string;
+}
+
 export interface DonkiEndpointResult {
   type: DonkiEventType;
   ok: boolean;
   host?: DonkiHost;
   count: number;
   error?: string;
+  attempts: DonkiAttempt[];
 }
 
-export interface DonkiSnapshot {
+/** What the console currently holds for one DONKI event type. */
+export interface DonkiTypeState {
+  type: DonkiEventType;
   events: DonkiEvent[];
-  fetchedAt: string;
-  rangeStart: string;
-  rangeEnd: string;
-  endpoints: DonkiEndpointResult[];
+  source: DonkiDataSource;
+  /** When this data was retrieved from NASA (archive: when the bundle was built). */
+  retrievedAt: string | null;
+  host: DonkiHost | null;
+  rangeStart: string | null;
+  rangeEnd: string | null;
+  /** Result of the most recent request for this type in this session; null when none was made. */
+  lastAttempt: { at: string; ok: boolean; error?: string; attempts: DonkiAttempt[] } | null;
 }
 
-export type SpaceWeatherMode = "LIVE" | "PARTIAL" | "CACHED" | "DEMO";
+/**
+ * LIVE: every type was received in this session.
+ * PARTIAL: some types were received in this session.
+ * CACHED: nothing received this session; showing data saved by an earlier session.
+ * ARCHIVED: showing the bundled 2024 archive only.
+ * UNAVAILABLE: the feed cannot be reached now (offline, or every request failed);
+ * whatever is shown is cached or archived and labelled as such.
+ */
+export type SpaceWeatherMode = "LIVE" | "PARTIAL" | "CACHED" | "ARCHIVED" | "UNAVAILABLE";

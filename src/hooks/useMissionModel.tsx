@@ -104,7 +104,9 @@ export function MissionModelProvider({ children }: { children: ReactNode }) {
 
   const lastReading = useMemo(() => {
     let best: MetricReading | null = null;
+    // Last health check: crew-taken readings. The dosimeter logs automatically at end of day.
     for (const d of Object.values(diagnostics)) {
+      if (d.metricId === "radiation") continue;
       if (d.latest && (!best || Date.parse(d.latest.recordedAt) > Date.parse(best.recordedAt))) best = d.latest;
     }
     return best;

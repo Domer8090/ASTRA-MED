@@ -12,6 +12,7 @@ import { scrollToSection } from "./navigation";
 import { Dialog } from "./shared/Dialog";
 import { ProvenanceTag } from "./shared/ProvenanceTag";
 import { StatusBadge } from "./shared/StatusBadge";
+import { BasisLine } from "./shared/BasisLine";
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -47,6 +48,9 @@ function ThreeQuestions({ d }: { d: MetricDiagnostic }) {
         </div>
       </dl>
       {d.notes.length > 0 ? <p className="border-t border-line px-4 py-2 text-sm text-ink-2">{d.notes.join(" ")}</p> : null}
+      <div className="border-t border-line px-4 pb-3">
+        <BasisLine basis={d.basis} />
+      </div>
     </div>
   );
 }
@@ -115,6 +119,17 @@ function SystemGuidanceBody({ id }: { id: GuidanceRef & { kind: "system" } }) {
   const st = systems[id.id];
   return (
     <>
+      {st.advisories.map((a) => {
+        const rel = a.relations.find((r) => r.id === id.id);
+        return (
+          <div key={a.id} className={`mx-5 mt-4 rounded-tile border px-4 py-3 ${a.level === "ALL CLEAR" ? "border-nominal/40" : "border-caution/50 bg-caution/[0.06]"}`}>
+            <p className={`label ${a.level === "ALL CLEAR" ? "text-nominal" : "text-caution"}`}>Environmental hazard {a.level}, not personal dose</p>
+            <p className="mt-1 text-sm text-ink">
+              {a.title}. {rel ? `${rel.relation} link: ${rel.text}` : a.summary}
+            </p>
+          </div>
+        );
+      })}
       <div className="mx-5 mt-4 rounded-tile border border-line bg-panel px-4 py-3">
         <p className="label">Recommended next step</p>
         <p className="mt-1 text-base text-ink">{st.recommendedNextStep}</p>

@@ -12,6 +12,7 @@
  *   27-day modulation. Cumulative dose is the running sum, so it never decreases.
  */
 import { MISSION } from "../config/thresholds";
+import { SEP_SCENARIO } from "./scenarioHazards";
 import type { MissionDayTelemetry, ScenarioId } from "../types/health";
 import { ar1Series, clamp, hashSeed, mulberry32, roundTo, smoothstep } from "../utils/prng";
 
@@ -65,9 +66,9 @@ export function cardiovascularDrift(day: number): number {
   return rise * ease;
 }
 
-/** Scenario C: extra synthetic dosimeter dose (mSv) during the simulated SEP. */
-const SEP_EXTRA_DOSE: Record<number, number> = { 131: 6.4, 132: 2.8, 133: 0.9 };
-const SEP_SLEEP: Record<number, number> = { 131: 5.2, 132: 5.6 };
+/** Scenario C overlay: documented model in src/data/scenarioHazards.ts. */
+const SEP_EXTRA_DOSE: Record<number, number> = SEP_SCENARIO.dosimeterOverlayMsv;
+const SEP_SLEEP: Record<number, number> = SEP_SCENARIO.sleepOverrideHours;
 
 function generate(scenarioId: ScenarioId): MissionDayTelemetry[] {
   const s = baseSeries();

@@ -13,6 +13,10 @@ interface UiState {
   log: LogRequest | null;
   sourcesTab: SourcesTab | null;
   selectedSystem: BodySystemId;
+  /** Metric in focus inside the selected system; null shows the system's leading driver. */
+  selectedMetric: MetricId | null;
+  /** "auto" follows the highest-priority system; "user" keeps the crew member's choice. */
+  selectionMode: "auto" | "user";
 }
 
 interface UiActions {
@@ -23,13 +27,15 @@ interface UiActions {
   openSources: (tab?: SourcesTab) => void;
   closeSources: () => void;
   selectSystem: (id: BodySystemId) => void;
+  selectMetric: (id: MetricId, system: BodySystemId) => void;
+  followPriority: () => void;
 }
 
 const UiStateContext = createContext<UiState | null>(null);
 const UiActionsContext = createContext<UiActions | null>(null);
 
 export function UiProvider({ children }: { children: ReactNode }) {
-  const [state, setState] = useState<UiState>({ guidance: null, log: null, sourcesTab: null, selectedSystem: "cardiovascular" });
+  const [state, setState] = useState<UiState>({ guidance: null, log: null, sourcesTab: null, selectedSystem: "cardiovascular", selectedMetric: null, selectionMode: "auto" });
 
   const openGuidance = useCallback((ref: GuidanceRef) => setState((s) => ({ ...s, guidance: ref })), []);
   const closeGuidance = useCallback(() => setState((s) => ({ ...s, guidance: null })), []);
@@ -40,11 +46,16 @@ export function UiProvider({ children }: { children: ReactNode }) {
   const closeLog = useCallback(() => setState((s) => ({ ...s, log: null })), []);
   const openSources = useCallback((tab: SourcesTab = "about") => setState((s) => ({ ...s, sourcesTab: tab })), []);
   const closeSources = useCallback(() => setState((s) => ({ ...s, sourcesTab: null })), []);
-  const selectSystem = useCallback((id: BodySystemId) => setState((s) => ({ ...s, selectedSystem: id })), []);
+  const selectSystem = useCallback((id: BodySystemId) => setState((s) => ({ ...s, selectedSystem: id, selectedMetric: null, selectionMode: "user" })), []);
+  const followPriority = useCallback(() => setState((s) => ({ ...s, selectedMetric: null, selectionMode: "auto" })), []);
+  const selectMetric = useCallback(
+    (id: MetricId, system: BodySystemId) => setState((s) => ({ ...s, selectedSystem: system, selectedMetric: id, selectionMode: "user" })),
+    [],
+  );
 
   const actions = useMemo<UiActions>(
-    () => ({ openGuidance, closeGuidance, openLog, closeLog, openSources, closeSources, selectSystem }),
-    [openGuidance, closeGuidance, openLog, closeLog, openSources, closeSources, selectSystem],
+    () => ({ openGuidance, closeGuidance, openLog, closeLog, openSources, closeSources, selectSystem, selectMetric, followPriority }),
+    [openGuidance, closeGuidance, openLog, closeLog, openSources, closeSources, selectSystem, selectMetric, followPriority],
   );
 
   return (

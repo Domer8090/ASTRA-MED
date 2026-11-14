@@ -174,6 +174,7 @@ export function createMissionStore(storage: StorageService = createStorageServic
         unit: METRIC_UNITS[input.metricId],
         missionDay: input.missionDay,
         recordedAt: input.recordedAt,
+        enteredAt: new Date().toISOString(),
         source: "manual",
         ...(input.notes ? { notes: input.notes } : {}),
         ...(input.glucoseContext ? { glucoseContext: input.glucoseContext } : {}),

@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { createStorageService, memoryBackend, STORAGE_KEYS, type StorageLike } from "../services/storageService";
 import { createMissionStore } from "./missionStore";
 import { validateMeasurement, type MeasurementDraft } from "../utils/validation";
+import { formatMetStamp, missionDayOf } from "../utils/dates";
 
 const draft = (over: Partial<MeasurementDraft>): MeasurementDraft => ({
   metricId: "heartRate",
   missionDay: "42",
-  recordedAtLocal: "2026-06-14T07:30",
+  shipTime: "07:30",
   value: "",
   systolic: "",
   diastolic: "",
@@ -15,7 +16,7 @@ const draft = (over: Partial<MeasurementDraft>): MeasurementDraft => ({
   notes: "",
   ...over,
 });
-const ctx = { previousCumulativeDose: 75, nextManualDose: null, now: Date.parse("2026-11-13T00:00:00Z") };
+const ctx = { previousCumulativeDose: 75, nextManualDose: null };
 
 describe("measurement validation", () => {
   it("accepts a valid heart rate and rejects impossible values", () => {
@@ -34,11 +35,15 @@ describe("measurement validation", () => {
     expect(validateMeasurement(draft({ metricId: "bloodPressure", systolic: "122", diastolic: "78" }), ctx).ok).toBe(true);
   });
 
-  it("rejects mission day out of range and future timestamps", () => {
-    const r = validateMeasurement(draft({ value: "60", missionDay: "181" }), ctx);
-    expect(r.ok).toBe(false);
-    const f = validateMeasurement(draft({ value: "60", recordedAtLocal: "2030-01-01T00:00" }), ctx);
-    expect(f.ok).toBe(false);
+  it("rejects mission day out of range and invalid ship time; stores MET-consistent timestamps", () => {
+    expect(validateMeasurement(draft({ value: "60", missionDay: "181" }), ctx).ok).toBe(false);
+    expect(validateMeasurement(draft({ value: "60", shipTime: "25:10" }), ctx).ok).toBe(false);
+    const ok = validateMeasurement(draft({ value: "60", missionDay: "42", shipTime: "06:41" }), ctx);
+    expect(ok.ok).toBe(true);
+    if (ok.ok) {
+      expect(missionDayOf(ok.recordedAt)).toBe(42);
+      expect(formatMetStamp(ok.recordedAt)).toBe("041/06:41");
+    }
   });
 
   it("rejects a cumulative dose lower than the previous day", () => {
@@ -55,6 +60,7 @@ describe("mission store persistence", () => {
     const r = a.logMeasurement({ metricId: "sleep", value: 6.8, missionDay: 42, recordedAt: "2026-06-14T07:00:00.000Z" });
     expect(r.persisted).toBe(true);
     expect(r.completedTaskTitle).toBe("Sleep log");
+    expect(r.measurement?.enteredAt).toBeTruthy();
     a.setTaskCompletion(42, "ared-session", true);
     a.setScenario("sep");
     const b = createMissionStore(createStorageService(backend));

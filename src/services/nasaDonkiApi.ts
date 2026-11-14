@@ -1,10 +1,13 @@
 /**
  * NASA DONKI (Space Weather Database Of Notifications, Knowledge, Information).
  *
- * - Primary host: api.nasa.gov with VITE_NASA_API_KEY, falling back to DEMO_KEY.
- * - Per-endpoint fallback to the official CCMC host, which serves the same
- *   catalogue without a key. (Checked 2026-11-13: api.nasa.gov/DONKI/FLR
- *   returned HTTP 404 while CCMC served FLR.)
+ * Hosts:
+ * - CCMC DONKI API, the documented base https://ccmc.gsfc.nasa.gov/DONKI-API/get/
+ *   (no key, CORS *). Paths have no trailing slash; a trailing slash returns 404.
+ * - api.nasa.gov/DONKI with VITE_NASA_API_KEY or DEMO_KEY.
+ * Order: with DEMO_KEY, CCMC first (DEMO_KEY is quickly exhausted: HTTP 429
+ * observed 2026-11-14). With a personal key, api.nasa.gov first. Each event
+ * type falls back to the other host independently.
  * - Timeout per request, Promise.allSettled across endpoints, safe JSON parsing
  *   and field-by-field normalisation. External data is untrusted input.
  * - Only environment data is requested. No health data is ever sent.
@@ -13,13 +16,13 @@
  * loads the app. A personal key here is not secret.
  */
 import type {
+  DonkiAttempt,
   DonkiDataSource,
   DonkiDetail,
   DonkiEndpointResult,
   DonkiEvent,
   DonkiEventType,
   DonkiHost,
-  DonkiSnapshot,
 } from "../types/health";
 import { isoDateUtc } from "../utils/dates";
 import { isRecord } from "../utils/validation";
@@ -27,12 +30,13 @@ import { isRecord } from "../utils/validation";
 export const DONKI_TYPES: readonly DonkiEventType[] = ["FLR", "SEP", "CME", "NOTIFICATION"] as const;
 export const REQUEST_TIMEOUT_MS = 12_000;
 export const MIN_REFRESH_INTERVAL_MS = 10 * 60_000;
-export const AUTO_REFRESH_AFTER_MS = 30 * 60_000;
+/** Refresh on every load when online; the 10-minute throttle still applies. */
+export const AUTO_REFRESH_AFTER_MS = 0;
 export const LOOKBACK_DAYS = 30;
 
 const HOSTS: Record<DonkiHost, string> = {
   "api.nasa.gov": "https://api.nasa.gov/DONKI",
-  "ccmc.gsfc.nasa.gov": "https://ccmc.gsfc.nasa.gov/DONKI/WS/get",
+  "ccmc.gsfc.nasa.gov": "https://ccmc.gsfc.nasa.gov/DONKI-API/get",
 };
 
 const PATHS: Record<DonkiEventType, string> = { FLR: "FLR", SEP: "SEP", CME: "CME", NOTIFICATION: "notifications" };
@@ -179,12 +183,13 @@ export function normalizeCme(raw: unknown, dataSource: DonkiDataSource): DonkiEv
     type: "CME",
     title: speed ? `Coronal mass ejection, ${speed.toLocaleString()} km/s` : "Coronal mass ejection",
     ...(startTime ? { startTime } : {}),
-    ...(best && str(best.type, 4) ? { severity: `Type ${str(best.type, 4)}` } : {}),
+    ...(best && str(best.type, 4) ? { severity: `Speed class ${str(best.type, 4)}` } : {}),
     description: note ?? "A coronal mass ejection was observed. A CME does not by itself imply a specific radiation dose.",
     ...(safeLink(raw.link) ? { sourceUrl: safeLink(raw.link)! } : {}),
     dataSource,
     details: details([
       ["Speed", speed ? `${speed.toLocaleString()} km/s` : undefined],
+      ["Speed class", best && str(best.type, 4) ? `${str(best.type, 4)} (DONKI SCORE scale: S < 500, C 500–999, O 1000–1999, R 2000–2999, ER ≥ 3000 km/s)` : undefined],
       ["Half angle", best && typeof best.halfAngle === "number" ? `${best.halfAngle}°` : undefined],
       ["Source location", str(raw.sourceLocation, 20)],
       ["Active region", numOrStr(raw.activeRegionNum)],
@@ -236,18 +241,24 @@ export function sortEvents(events: DonkiEvent[]): DonkiEvent[] {
 
 export type FetchLike = (input: string, init?: { signal?: AbortSignal }) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>;
 
-async function fetchJson(fetchImpl: FetchLike, url: string, timeoutMs: number): Promise<unknown> {
+class HttpError extends Error {
+  constructor(public readonly status: number) {
+    super(`HTTP ${status}`);
+  }
+}
+
+async function fetchJson(fetchImpl: FetchLike, url: string, timeoutMs: number): Promise<{ json: unknown; status: number }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetchImpl(url, { signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new HttpError(res.status);
     const text = await res.text();
-    if (text.trim() === "") return [];
+    if (text.trim() === "") return { json: [], status: res.status };
     try {
-      return JSON.parse(text) as unknown;
-    } catch {
-      throw new Error("Response was not valid JSON");
+      return { json: JSON.parse(text) as unknown, status: res.status };
+    } catch (err) {
+      throw new Error("Response was not valid JSON", { cause: err });
     }
   } catch (err) {
     if (controller.signal.aborted) throw new Error(`Timed out after ${Math.round(timeoutMs / 1000)} s`, { cause: err });
@@ -257,70 +268,91 @@ async function fetchJson(fetchImpl: FetchLike, url: string, timeoutMs: number): 
   }
 }
 
-function buildUrl(host: DonkiHost, type: DonkiEventType, startDate: string, endDate: string, apiKey: string): string {
+export function hostOrder(): DonkiHost[] {
+  return usingDemoKey() ? ["ccmc.gsfc.nasa.gov", "api.nasa.gov"] : ["api.nasa.gov", "ccmc.gsfc.nasa.gov"];
+}
+
+export function buildUrl(host: DonkiHost, type: DonkiEventType, startDate: string, endDate: string, apiKey: string): string {
   const params = new URLSearchParams({ startDate, endDate });
   if (type === "NOTIFICATION") params.set("type", "all");
   if (host === "api.nasa.gov") params.set("api_key", apiKey);
   return `${HOSTS[host]}/${PATHS[type]}?${params.toString()}`;
 }
 
-interface EndpointOutcome {
+export interface EndpointOutcome {
   result: DonkiEndpointResult;
   events: DonkiEvent[];
 }
 
-async function fetchEndpoint(fetchImpl: FetchLike, type: DonkiEventType, startDate: string, endDate: string, timeoutMs: number): Promise<EndpointOutcome> {
-  const errors: string[] = [];
-  for (const host of ["api.nasa.gov", "ccmc.gsfc.nasa.gov"] as const) {
+/** Fetch one event type, trying each host in order. Never throws. */
+export async function fetchEndpoint(
+  type: DonkiEventType,
+  range: { startDate: string; endDate: string },
+  options: { fetchImpl?: FetchLike; timeoutMs?: number; hosts?: DonkiHost[] } = {},
+): Promise<EndpointOutcome> {
+  const fetchImpl: FetchLike = options.fetchImpl ?? ((url, init) => fetch(url, init));
+  const attempts: DonkiAttempt[] = [];
+  for (const host of options.hosts ?? hostOrder()) {
     try {
-      const raw = await fetchJson(fetchImpl, buildUrl(host, type, startDate, endDate, getApiKey()), timeoutMs);
-      const events = normalizeList(type, raw, "live");
-      return { result: { type, ok: true, host, count: events.length }, events };
+      const { json, status } = await fetchJson(fetchImpl, buildUrl(host, type, range.startDate, range.endDate, getApiKey()), options.timeoutMs ?? REQUEST_TIMEOUT_MS);
+      if (!Array.isArray(json)) throw new Error("Response was not a list of records");
+      const events = normalizeList(type, json, "live");
+      attempts.push({ host, status });
+      return { result: { type, ok: true, host, count: events.length, attempts }, events };
     } catch (err) {
-      errors.push(`${host}: ${err instanceof Error ? err.message : "failed"}`);
+      attempts.push({
+        host,
+        ...(err instanceof HttpError ? { status: err.status } : {}),
+        error: err instanceof Error ? err.message : "failed",
+      });
     }
   }
-  return { result: { type, ok: false, count: 0, error: errors.join("; ") }, events: [] };
+  return {
+    result: { type, ok: false, count: 0, error: attempts.map((a) => `${a.host}: ${a.error ?? "failed"}`).join("; "), attempts },
+    events: [],
+  };
 }
 
-/**
- * Fetches all four event types. Never throws. Returns null when every endpoint
- * failed, so the caller keeps cached or fallback data.
- */
-export async function fetchDonkiSnapshot(options: {
+export function queryRange(now: Date, lookbackDays = LOOKBACK_DAYS): { startDate: string; endDate: string } {
+  return { startDate: isoDateUtc(new Date(now.getTime() - lookbackDays * 86_400_000)), endDate: isoDateUtc(now) };
+}
+
+/** Fetch all four types independently and in parallel. One failure never blocks the others. */
+export async function fetchAllTypes(options: {
   now?: Date;
   lookbackDays?: number;
   fetchImpl?: FetchLike;
   timeoutMs?: number;
-} = {}): Promise<{ snapshot: DonkiSnapshot | null; endpoints: DonkiEndpointResult[] }> {
+} = {}): Promise<{ outcomes: EndpointOutcome[]; range: { startDate: string; endDate: string }; at: string }> {
   const now = options.now ?? new Date();
-  const start = new Date(now.getTime() - (options.lookbackDays ?? LOOKBACK_DAYS) * 86_400_000);
-  const startDate = isoDateUtc(start);
-  const endDate = isoDateUtc(now);
-  const fetchImpl: FetchLike = options.fetchImpl ?? ((url, init) => fetch(url, init));
+  const range = queryRange(now, options.lookbackDays);
   const settled = await Promise.allSettled(
-    DONKI_TYPES.map((t) => fetchEndpoint(fetchImpl, t, startDate, endDate, options.timeoutMs ?? REQUEST_TIMEOUT_MS)),
+    DONKI_TYPES.map((t) => fetchEndpoint(t, range, { ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}), ...(options.timeoutMs ? { timeoutMs: options.timeoutMs } : {}) })),
   );
-  const outcomes: EndpointOutcome[] = settled.map((s, i) =>
-    s.status === "fulfilled" ? s.value : { result: { type: DONKI_TYPES[i]!, ok: false, count: 0, error: "Unexpected failure" }, events: [] },
+  const outcomes = settled.map((s, i) =>
+    s.status === "fulfilled" ? s.value : { result: { type: DONKI_TYPES[i]!, ok: false, count: 0, error: "Unexpected failure", attempts: [] }, events: [] },
   );
-  const endpoints = outcomes.map((o) => o.result);
-  if (!endpoints.some((e) => e.ok)) return { snapshot: null, endpoints };
-  return {
-    snapshot: {
-      events: sortEvents(outcomes.flatMap((o) => o.events)),
-      fetchedAt: now.toISOString(),
-      rangeStart: startDate,
-      rangeEnd: endDate,
-      endpoints,
-    },
-    endpoints,
-  };
+  return { outcomes, range, at: now.toISOString() };
 }
 
-/* ---------------- cache validation ---------------- */
+/* ---------------- cache (v2: one entry per event type) ---------------- */
 
 const EVENT_TYPES = new Set<string>(DONKI_TYPES);
+const HOST_SET = new Set<string>(["api.nasa.gov", "ccmc.gsfc.nasa.gov"]);
+
+export interface CachedTypeEntry {
+  events: DonkiEvent[];
+  retrievedAt: string;
+  host: DonkiHost | null;
+  rangeStart: string | null;
+  rangeEnd: string | null;
+}
+
+export interface DonkiCache {
+  version: 2;
+  types: Partial<Record<DonkiEventType, CachedTypeEntry>>;
+  lastAttemptAt: string | null;
+}
 
 function sanitizeEvent(x: unknown): DonkiEvent | null {
   if (!isRecord(x) || typeof x.id !== "string" || !EVENT_TYPES.has(x.type as string) || typeof x.title !== "string") return null;
@@ -331,9 +363,7 @@ function sanitizeEvent(x: unknown): DonkiEvent | null {
     description: typeof x.description === "string" ? x.description.slice(0, 800) : "",
     dataSource: "cached",
     details: Array.isArray(x.details)
-      ? x.details
-          .filter((d): d is DonkiDetail => isRecord(d) && typeof d.label === "string" && typeof d.value === "string")
-          .slice(0, 8)
+      ? x.details.filter((d): d is DonkiDetail => isRecord(d) && typeof d.label === "string" && typeof d.value === "string").slice(0, 8)
       : [],
     linkedIds: Array.isArray(x.linkedIds) ? x.linkedIds.filter((s): s is string => typeof s === "string").slice(0, 12) : [],
   };
@@ -347,18 +377,34 @@ function sanitizeEvent(x: unknown): DonkiEvent | null {
   return e;
 }
 
-/** Validates a cached snapshot. Cached events are always re-labelled `cached`. */
-export function sanitizeSnapshot(x: unknown): DonkiSnapshot | null {
-  if (!isRecord(x) || !Array.isArray(x.events) || typeof x.fetchedAt !== "string" || Number.isNaN(Date.parse(x.fetchedAt))) return null;
-  return {
-    events: x.events.map(sanitizeEvent).filter((e): e is DonkiEvent => e !== null).slice(0, 600),
-    fetchedAt: x.fetchedAt,
-    rangeStart: typeof x.rangeStart === "string" ? x.rangeStart : "",
-    rangeEnd: typeof x.rangeEnd === "string" ? x.rangeEnd : "",
-    endpoints: Array.isArray(x.endpoints)
-      ? x.endpoints
-          .filter((r): r is DonkiEndpointResult => isRecord(r) && EVENT_TYPES.has(r.type as string) && typeof r.ok === "boolean")
-          .map((r) => ({ type: r.type, ok: r.ok, count: typeof r.count === "number" ? r.count : 0, ...(r.host ? { host: r.host } : {}), ...(r.error ? { error: String(r.error).slice(0, 200) } : {}) }))
-      : [],
-  };
+const isIso = (v: unknown): v is string => typeof v === "string" && !Number.isNaN(Date.parse(v));
+
+/**
+ * Validates the stored cache. Every event read back is labelled `cached`,
+ * whatever it was when saved. Accepts the older v1 single-snapshot shape.
+ */
+export function sanitizeCache(x: unknown): DonkiCache | null {
+  if (!isRecord(x)) return null;
+  const out: DonkiCache = { version: 2, types: {}, lastAttemptAt: isIso(x.lastAttemptAt) ? x.lastAttemptAt : null };
+  if (x.version === 2 && isRecord(x.types)) {
+    for (const [type, entry] of Object.entries(x.types)) {
+      if (!EVENT_TYPES.has(type) || !isRecord(entry) || !Array.isArray(entry.events) || !isIso(entry.retrievedAt)) continue;
+      out.types[type as DonkiEventType] = {
+        events: entry.events.map(sanitizeEvent).filter((e): e is DonkiEvent => e !== null && e.type === type).slice(0, 400),
+        retrievedAt: entry.retrievedAt,
+        host: HOST_SET.has(entry.host as string) ? (entry.host as DonkiHost) : null,
+        rangeStart: typeof entry.rangeStart === "string" ? entry.rangeStart : null,
+        rangeEnd: typeof entry.rangeEnd === "string" ? entry.rangeEnd : null,
+      };
+    }
+    return out;
+  }
+  // v1: { snapshot: { events, fetchedAt, endpoints } }
+  if (isRecord(x.snapshot) && Array.isArray(x.snapshot.events) && isIso(x.snapshot.fetchedAt)) {
+    const events = x.snapshot.events.map(sanitizeEvent).filter((e): e is DonkiEvent => e !== null);
+    for (const type of DONKI_TYPES) {
+      out.types[type] = { events: events.filter((e) => e.type === type), retrievedAt: x.snapshot.fetchedAt, host: null, rangeStart: null, rangeEnd: null };
+    }
+  }
+  return out;
 }

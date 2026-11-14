@@ -3,6 +3,7 @@ import { SCENARIOS, SCENARIO_ORDER } from "../data/scenarios";
 import { useMissionState, useMissionStore } from "../hooks/useMissionState";
 import { useToast } from "../hooks/useToast";
 import { isScenarioId } from "../data/scenarios";
+import { useUiActions } from "../hooks/useUi";
 
 /** Switches the deterministic demo scenario. Logged entries are never erased by a switch. */
 export function ScenarioSelector({ compact = false }: { compact?: boolean }) {
@@ -10,6 +11,7 @@ export function ScenarioSelector({ compact = false }: { compact?: boolean }) {
   const store = useMissionStore();
   const toast = useToast();
   const scenarioId = useMissionState((s) => s.settings.scenarioId);
+  const { followPriority } = useUiActions();
 
   return (
     <div className="flex min-w-0 flex-col">
@@ -25,6 +27,7 @@ export function ScenarioSelector({ compact = false }: { compact?: boolean }) {
           if (!isScenarioId(next)) return;
           const prev = store.getState().settings;
           const result = store.setScenario(next);
+          followPriority();
           toast({
             tone: result.persisted ? "success" : "warning",
             title: result.message,

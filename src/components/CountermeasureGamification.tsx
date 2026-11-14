@@ -1,14 +1,15 @@
-import { BookOpen, Flame, Plus, RotateCcw, Trophy } from "lucide-react";
+import { BookOpen, ChevronDown, Flame, Plus, Trophy } from "lucide-react";
 import { COUNTERMEASURES } from "../config/thresholds";
 import { useMissionModel } from "../hooks/useMissionModel";
 import { useMissionStore } from "../hooks/useMissionState";
 import { useToast } from "../hooks/useToast";
 import { useUiActions } from "../hooks/useUi";
-import type { CountermeasureTask, FollowUpAction } from "../types/health";
+import type { CountermeasureTask } from "../types/health";
 import { formatLocalDateTime, padDay } from "../utils/dates";
 import { percent } from "../utils/formatting";
 import { Panel } from "./shared/Panel";
-import { StatusBadge } from "./shared/StatusBadge";
+import { FollowUpCard } from "./shared/FollowUpCard";
+import { ReadinessBreakdown } from "./shared/ReadinessBreakdown";
 
 function CheckBox({ checked }: { checked: boolean }) {
   return (
@@ -63,7 +64,7 @@ function TaskRow({ task, day }: { task: CountermeasureTask; day: number }) {
             {task.completed && task.via ? (
               <span>
                 {VIA_LABEL[task.via]}
-                {task.completedAt ? `, ${formatLocalDateTime(task.completedAt)}` : ""}
+                {task.completedAt ? `, marked ${formatLocalDateTime(task.completedAt)} (real time)` : ""}
               </span>
             ) : null}
           </span>
@@ -81,48 +82,6 @@ function TaskRow({ task, day }: { task: CountermeasureTask; day: number }) {
           <BookOpen aria-hidden="true" className="h-3.5 w-3.5" />
           Guide
         </button>
-      </div>
-    </li>
-  );
-}
-
-function FollowUpRow({ f, day }: { f: FollowUpAction; day: number }) {
-  const store = useMissionStore();
-  const toast = useToast();
-  const { openGuidance } = useUiActions();
-  return (
-    <li className={`rounded-tile border p-3 ${f.completed ? "border-line" : f.severity === "CRITICAL" ? "border-critical/55" : f.severity === "CAUTION" ? "border-caution/50" : "border-line-strong"}`}>
-      <div className="flex flex-wrap items-center gap-2">
-        {f.kind === "missed-task" ? (
-          <span className="chip-tag border-line-strong text-ink-2">Missed task</span>
-        ) : (
-          <StatusBadge status={f.severity} />
-        )}
-        <p className={`text-base font-semibold ${f.completed ? "text-ink-2 line-through decoration-ink-3" : "text-ink"}`}>{f.title}</p>
-      </div>
-      <p className="mt-1 text-sm text-ink-2">{f.reason}</p>
-      <p className="mt-1.5 text-sm text-ink">
-        <span className="font-semibold text-cyan">Next: </span>
-        {f.action}
-      </p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button type="button" className="btn btn-secondary min-h-[32px] text-xs" onClick={() => openGuidance(f.guidance)}>
-          <BookOpen aria-hidden="true" className="h-3.5 w-3.5" />
-          Open guidance
-        </button>
-        <button
-          type="button"
-          aria-pressed={f.completed}
-          className={`btn min-h-[32px] text-xs ${f.completed ? "btn-ghost" : "btn-secondary"}`}
-          onClick={() => {
-            const r = store.setFollowUpCompletion(day, f.id, !f.completed);
-            toast({ tone: r.persisted ? "success" : "warning", title: r.message, body: f.title });
-          }}
-        >
-          {f.completed ? <RotateCcw aria-hidden="true" className="h-3.5 w-3.5" /> : null}
-          {f.completed ? "Reopen" : "Mark done"}
-        </button>
-        {f.completed && f.completedAt ? <span className="self-center text-xs text-ink-3">Done {formatLocalDateTime(f.completedAt)}</span> : null}
       </div>
     </li>
   );
@@ -181,6 +140,21 @@ export function CountermeasureGamification() {
       <p className="mt-2 text-sm text-ink-2" aria-live="polite">
         {readiness.message}
       </p>
+      <p className="mt-0.5 text-2xs text-ink-3">XP, streak and completion include synthetic adherence history for earlier days, plus anything you mark.</p>
+      <details className="group mt-2 rounded-tile border border-line">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-sm [&::-webkit-details-marker]:hidden">
+          <span>
+            <span className="text-ink">Readiness </span>
+            <span className="num font-semibold text-ink">{readiness.score}/100</span>
+            <span className="text-ink-2">: how it relates to today&apos;s {percent(readiness.taskCompletion)}</span>
+          </span>
+          <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-ink-3 transition-transform duration-200 group-open:rotate-180" />
+        </summary>
+        <div className="border-t border-line px-3 py-3">
+          <p className="mb-3 text-sm text-ink-2">Today&apos;s tasks are half of the score. The rest comes from the last seven days, follow-ups and fresh measurements. It is an engagement indicator, not a medical clearance.</p>
+          <ReadinessBreakdown readiness={readiness} />
+        </div>
+      </details>
 
       <ul className="mt-2 divide-y divide-line" aria-label={`Countermeasure tasks for day ${day}`}>
         {tasks.map((t) => (
@@ -199,7 +173,7 @@ export function CountermeasureGamification() {
         ) : (
           <ul className="mt-2 space-y-2">
             {followUps.map((f) => (
-              <FollowUpRow key={f.id} f={f} day={day} />
+              <FollowUpCard key={f.id} f={f} day={day} />
             ))}
           </ul>
         )}

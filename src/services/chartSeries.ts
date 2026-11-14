@@ -39,6 +39,8 @@ export function buildChartRows(days: readonly EffectiveDay[], selectedDay: numbe
     const mood = get("mood");
     const ared = get("aredMinutes");
     const cumulative = get("radiation");
+    const pvt = get("pvt");
+    const hydration = get("hydration");
     const daily = past ? (days[d - 1]?.dailyRadiationMsv ?? null) : null;
     rows.push({
       day: d,
@@ -61,6 +63,10 @@ export function buildChartRows(days: readonly EffectiveDay[], selectedDay: numbe
       dailyDose: daily,
       cumulativeDose: cumulative,
       cumulativeManual: manual("radiation", cumulative),
+      pvt,
+      pvtManual: manual("pvt", pvt),
+      hydration,
+      hydrationManual: manual("hydration", hydration),
     });
   }
   return rows;
@@ -104,4 +110,26 @@ export function sparkValues(days: readonly EffectiveDay[], metric: MetricId, day
     else out.push(null);
   }
   return out;
+}
+
+export interface EventAnnotation {
+  id: string;
+  start: number;
+  end: number;
+  label: string;
+  kind: "health" | "environment" | "operations" | "manual";
+}
+
+/** Scenario events and manual entries inside the window, up to the selected day. */
+export function eventAnnotations(
+  events: readonly { id: string; title: string; startDay: number; endDay: number; kind: "health" | "environment" | "operations"; metrics: readonly MetricId[] }[],
+  range: [number, number],
+  selectedDay: number,
+  metrics?: readonly MetricId[],
+): EventAnnotation[] {
+  const last = Math.min(range[1], selectedDay);
+  return events
+    .filter((e) => e.startDay <= last && e.endDay >= range[0])
+    .filter((e) => !metrics || e.metrics.some((m) => metrics.includes(m)))
+    .map((e) => ({ id: e.id, start: Math.max(e.startDay, range[0]), end: Math.min(e.endDay, last), label: e.title, kind: e.kind }));
 }

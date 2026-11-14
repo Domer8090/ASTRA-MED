@@ -8,6 +8,7 @@ export function getCountermeasureTasks(aredTargetMinutes: number, hydrationTarge
   return [
     {
       id: "health-check-in",
+      systems: ["cardiovascular", "metabolicCircadian"],
       title: "Daily health check-in",
       description: "Review today's required vitals and log anything missing.",
       category: "monitoring",
@@ -19,6 +20,7 @@ export function getCountermeasureTasks(aredTargetMinutes: number, hydrationTarge
     },
     {
       id: "sleep-log",
+      systems: ["neuroOcular", "metabolicCircadian"],
       title: "Sleep log",
       description: "Record the length of your last sleep period.",
       category: "sleep",
@@ -31,6 +33,7 @@ export function getCountermeasureTasks(aredTargetMinutes: number, hydrationTarge
     },
     {
       id: "ared-session",
+      systems: ["musculoskeletal", "cardiovascular"],
       title: "ARED resistive exercise",
       description: "Complete only the assigned session in today's exercise plan.",
       category: "exercise",
@@ -44,6 +47,7 @@ export function getCountermeasureTasks(aredTargetMinutes: number, hydrationTarge
     },
     {
       id: "pvt-check",
+      systems: ["neuroOcular"],
       title: "PVT cognitive reaction check",
       description: "Run the scheduled Psychomotor Vigilance Test without interruptions.",
       category: "cognitive",
@@ -57,6 +61,7 @@ export function getCountermeasureTasks(aredTargetMinutes: number, hydrationTarge
     },
     {
       id: "hydration-check",
+      systems: ["metabolicCircadian", "cardiovascular"],
       title: "Hydration check",
       description: "Record today's fluid intake against the mission plan.",
       category: "hydration",
@@ -69,6 +74,7 @@ export function getCountermeasureTasks(aredTargetMinutes: number, hydrationTarge
     },
     {
       id: "radiation-review",
+      systems: ["immuneRadiation"],
       title: "Radiation status review",
       description: "Review the dosimeter reading and the space-weather monitor.",
       category: "radiation",
@@ -80,6 +86,7 @@ export function getCountermeasureTasks(aredTargetMinutes: number, hydrationTarge
     },
     {
       id: "wind-down",
+      systems: ["neuroOcular", "metabolicCircadian"],
       title: "Evening blue-light wind-down",
       description: "Follow the scheduled pre-sleep lighting and screen routine.",
       category: "sleep",

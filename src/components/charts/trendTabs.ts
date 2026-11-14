@@ -105,5 +105,18 @@ export const TABS: TabDef[] = [
     leftUnit: "mSv/day",
     rightUnit: "mSv",
   },
+  {
+    id: "pvtHydration",
+    label: "PVT & hydration",
+    metrics: ["pvt", "hydration"],
+    series: [
+      { key: "pvt", name: "PVT mean reaction time", unit: "ms", color: COLORS.cyan, kind: "line", axis: "left", decimals: 0, manualKey: "pvtManual" },
+      { key: "hydration", name: "Fluid intake", unit: "L", color: COLORS.blue, kind: "bar", axis: "right", decimals: 1, manualKey: "hydrationManual" },
+    ],
+    bands: [],
+    leftDomain: [180, 360],
+    rightDomain: [0, 4],
+    leftUnit: "ms",
+    rightUnit: "L",
+  },
 ];
-

@@ -3,7 +3,8 @@ import { MISSION } from "../config/thresholds";
 import { COLORS } from "../config/theme";
 import { useMissionModel } from "../hooks/useMissionModel";
 import { useMissionStore } from "../hooks/useMissionState";
-import type { HealthStatus } from "../types/health";
+import type { HealthStatus, ScenarioEvent } from "../types/health";
+import { SkipBack, SkipForward } from "lucide-react";
 import { padDay } from "../utils/dates";
 
 const TOTAL = MISSION.totalDays;
@@ -14,7 +15,9 @@ const TICK_COLOR: Record<HealthStatus, string> = {
 };
 
 /** 180 status ticks. Memoised: only redraws when statuses or the selected day change. */
-const Ticks = memo(function Ticks({ statuses, day, manualDays }: { statuses: HealthStatus[]; day: number; manualDays: Set<number> }) {
+const EVENT_COLOR = { health: COLORS.caution, environment: COLORS.blue, operations: COLORS.ink3 } as const;
+
+const Ticks = memo(function Ticks({ statuses, day, manualDays, events }: { statuses: HealthStatus[]; day: number; manualDays: Set<number>; events: ScenarioEvent[] }) {
   return (
     <svg viewBox={`0 0 ${TOTAL} 30`} preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
       {statuses.map((s, i) => {
@@ -27,6 +30,11 @@ const Ticks = memo(function Ticks({ statuses, day, manualDays }: { statuses: Hea
         <rect key={`m${d}`} x={d - 1 + 0.18} y={0} width={0.64} height={3} fill={COLORS.cyan} />
       ))}
       <rect x={0} y={27.5} width={TOTAL} height={0.6} fill="#1D344B" />
+      {events.map((e) => (
+        <rect key={e.id} x={e.startDay - 1} y={28.6} width={e.endDay - e.startDay + 1} height={1.4} fill={EVENT_COLOR[e.kind]}>
+          <title>{`${e.title}: days ${e.startDay}–${e.endDay}`}</title>
+        </rect>
+      ))}
     </svg>
   );
 });
@@ -54,37 +62,20 @@ export function MissionTrack() {
   }, [dayStatus]);
 
   return (
-    <div className="border-b border-line bg-space px-3 pb-2 pt-2 md:px-5">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-        <label htmlFor={inputId} className="label flex items-center gap-2">
-          Mission day track
-          <span className="hidden font-sans text-xs font-normal normal-case tracking-normal text-ink-3 sm:inline">
-            One tick per day, tall ticks mark CAUTION or CRITICAL. {counts.c} caution and {counts.k} critical days in this scenario.
-          </span>
-        </label>
-        <div className="relative -mx-1 flex max-w-full items-center gap-1 overflow-x-auto px-1">
-          <button type="button" className="btn btn-ghost min-h-[28px] shrink-0 px-2 text-xs" onClick={() => store.setSelectedDay(1)}>
-            Day 1
-          </button>
-          <button type="button" className="btn btn-ghost min-h-[28px] shrink-0 px-2 text-xs" disabled={prevAlert === undefined} onClick={() => prevAlert && store.setSelectedDay(prevAlert)}>
-            Previous alert
-          </button>
-          <button type="button" className="btn btn-ghost min-h-[28px] shrink-0 px-2 text-xs" disabled={nextAlert === undefined} onClick={() => nextAlert && store.setSelectedDay(nextAlert)}>
-            Next alert
-          </button>
-          <button type="button" className="btn btn-ghost min-h-[28px] shrink-0 px-2 text-xs" onClick={() => store.setSelectedDay(scenario.focusDay)}>
-            Scenario day {scenario.focusDay}
-          </button>
-          <button type="button" className="btn btn-ghost min-h-[28px] shrink-0 px-2 text-xs" onClick={() => store.setSelectedDay(TOTAL)}>
-            Day {TOTAL}
-          </button>
-        </div>
-      </div>
-
-      <div className="track-wrap relative mt-1.5 h-9 select-none">
-        <Ticks statuses={dayStatus} day={day} manualDays={manualDays} />
+    <div className="flex items-center gap-2 border-b border-line bg-space px-3 py-1.5 md:px-5">
+      <label htmlFor={inputId} className="label hidden shrink-0 sm:block">
+        Day track
+        <span className="sr-only">
+          . One tick per mission day; tall ticks mark CAUTION or CRITICAL. {counts.c} caution and {counts.k} critical days in this scenario.
+        </span>
+      </label>
+      <button type="button" className="btn btn-ghost min-h-[28px] min-w-[28px] shrink-0 px-1" aria-label="Previous alert day" title="Previous alert day" disabled={prevAlert === undefined} onClick={() => prevAlert && store.setSelectedDay(prevAlert)}>
+        <SkipBack aria-hidden="true" className="h-3.5 w-3.5" />
+      </button>
+      <div className="track-wrap relative h-7 min-w-0 flex-1 select-none">
+        <Ticks statuses={dayStatus} day={day} manualDays={manualDays} events={scenario.events} />
         <div className="track-cursor pointer-events-none absolute -top-0.5 bottom-0 w-[2px] -translate-x-1/2 rounded bg-cyan" style={{ left: `${pct}%` }}>
-          <span className="num absolute -top-[1px] left-1.5 whitespace-nowrap rounded-badge bg-cyan px-1 text-2xs font-semibold leading-[14px] text-space">
+          <span className={`num absolute top-0 whitespace-nowrap rounded-badge bg-cyan px-1 text-2xs font-semibold leading-[14px] text-space ${pct > 90 ? "right-1.5" : "left-1.5"}`}>
             D{padDay(day)}
           </span>
         </div>
@@ -100,25 +91,18 @@ export function MissionTrack() {
           className="track-range absolute inset-0 h-full w-full"
         />
       </div>
-
-      <div className="relative mt-0.5 hidden h-8 md:block" aria-hidden="true">
-        {scenario.events.map((e, i, all) => {
-          const left = ((e.startDay - 1) / TOTAL) * 100;
-          const width = ((e.endDay - e.startDay + 1) / TOTAL) * 100;
-          const color = e.kind === "environment" ? "bg-blue" : e.kind === "operations" ? "bg-ink-3" : "bg-caution/80";
-          // Stagger labels onto a second line when the previous event starts too close.
-          const prev = all[i - 1];
-          const lower = prev !== undefined && e.startDay - prev.startDay < 26 && i % 2 === 1;
-          return (
-            <div key={e.id} className="absolute top-0 h-8" style={{ left: `${left}%`, width: `max(4px, ${width}%)` }} title={`${e.title}: days ${e.startDay}–${e.endDay}`}>
-              <span className={`block h-[3px] w-full rounded-full ${color}`} />
-              <span className={`absolute left-0 whitespace-nowrap text-2xs text-ink-3 ${lower ? "top-[17px]" : "top-[5px]"}`}>
-                <span className="text-ink-2">D{e.startDay}</span> {e.title}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+      <button type="button" className="btn btn-ghost min-h-[28px] min-w-[28px] shrink-0 px-1" aria-label="Next alert day" title="Next alert day" disabled={nextAlert === undefined} onClick={() => nextAlert && store.setSelectedDay(nextAlert)}>
+        <SkipForward aria-hidden="true" className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        aria-label={`Go to scenario ${scenario.code} demo start, day ${scenario.focusDay}`}
+        title={`Scenario ${scenario.code} demo starts on day ${scenario.focusDay}`}
+        className={`btn btn-ghost min-h-[28px] shrink-0 px-2 text-xs ${day === scenario.focusDay ? "text-cyan" : ""}`}
+        onClick={() => store.setSelectedDay(scenario.focusDay)}
+      >
+        <span className="hidden md:inline">Demo start&nbsp;</span>D{scenario.focusDay}
+      </button>
       <p className="sr-only">
         Scenario events: {scenario.events.map((e) => `${e.title}, days ${e.startDay} to ${e.endDay}`).join("; ")}.
       </p>

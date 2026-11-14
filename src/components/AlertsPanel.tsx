@@ -8,6 +8,7 @@ import { padDay } from "../utils/dates";
 import { formatWithUnit } from "../utils/formatting";
 import { Panel } from "./shared/Panel";
 import { ProvenanceTag } from "./shared/ProvenanceTag";
+import { BasisLine } from "./shared/BasisLine";
 import { StatusBadge, StatusIcon } from "./shared/StatusBadge";
 
 interface TimelineItem {
@@ -56,11 +57,12 @@ export function AlertsPanel() {
   }, [metricDayStatus, day, measurements, scenario.events]);
 
   const alerts = overall.drivers;
+  const activeAdvisories = advisories.filter((a) => a.severity !== "NOMINAL");
 
   return (
     <Panel id="alerts" title="Alerts and health events" subtitle="Each alert answers what changed, why it matters in space and what to do next.">
       <h3 className="label">Active alerts, day {padDay(day)}</h3>
-      {alerts.length === 0 && advisories.length === 0 ? (
+      {alerts.length === 0 && activeAdvisories.length === 0 ? (
         <div className="mt-2 flex items-start gap-2 rounded-tile border border-nominal/35 px-3 py-3">
           <CircleCheck aria-hidden="true" className="mt-0.5 h-4 w-4 text-nominal" />
           <p className="text-sm text-ink">
@@ -69,7 +71,7 @@ export function AlertsPanel() {
         </div>
       ) : (
         <ul className="mt-2 space-y-2">
-          {advisories.map((a) => (
+          {activeAdvisories.map((a) => (
             <li key={a.id} className="rounded-tile border border-caution/50 p-3">
               <p className="flex flex-wrap items-center gap-2">
                 <Radiation aria-hidden="true" className="h-4 w-4 text-caution" />
@@ -90,6 +92,7 @@ export function AlertsPanel() {
                   <dd className="text-ink">{a.nextStep}</dd>
                 </div>
               </dl>
+              <BasisLine basis={a.basis} />
             </li>
           ))}
           {alerts.map((d) => (
@@ -119,6 +122,7 @@ export function AlertsPanel() {
                   <dd className="text-ink">{d.recommendedNextStep}</dd>
                 </div>
               </dl>
+              <BasisLine basis={d.basis} />
             </li>
           ))}
         </ul>

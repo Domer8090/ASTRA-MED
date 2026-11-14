@@ -37,6 +37,7 @@ import {
   type EnvironmentAdvisory,
 } from "../types/health";
 import { formatDose, formatMetricValue, isBloodPressure, isSymptomValue, listSymptoms } from "../utils/formatting";
+import { metricBasis } from "./basis";
 
 export interface EngineSettings {
   aredTargetMinutes: number;
@@ -605,6 +606,7 @@ export function evaluateMetric(input: EngineInput, metricId: MetricId, day: numb
       persistenceDays: 1,
       triggeredRules: [rule(`${metricId}-missing`, "CAUTION", "No measurement recorded", "none", "At least one reading", "astra-assumption")],
       notes: [],
+      basis: metricBasis(metricId, [rule(`${metricId}-missing`, "CAUTION", "No measurement recorded", "none", "At least one reading", "astra-assumption")]),
     };
   }
 
@@ -648,6 +650,7 @@ export function evaluateMetric(input: EngineInput, metricId: MetricId, day: numb
     persistenceDays,
     triggeredRules: rules,
     notes: ev.notes,
+    basis: metricBasis(metricId, rules, ev.notes),
   };
 }
 
@@ -672,7 +675,7 @@ export function aggregateStatus(
     if (d.status !== "NOMINAL") drivers.push(d);
   }
   drivers.sort((a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status] || PRIMARY_METRIC_IDS.indexOf(a.metricId as never) - PRIMARY_METRIC_IDS.indexOf(b.metricId as never));
-  return { status, counts, advisoryCount: advisories.length, drivers };
+  return { status, counts, advisoryCount: advisories.filter((a) => a.severity !== "NOMINAL").length, drivers };
 }
 
 /** Overall status for every mission day, plus each metric's status per day. Used by the mission track and chart annotations. */

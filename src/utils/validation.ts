@@ -29,6 +29,7 @@ import {
   type VitalMeasurement,
 } from "../types/health";
 import { METRIC_UNITS } from "./formatting";
+import { missionDayToIso, shipTimeToMinutes } from "./dates";
 
 export const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === "object" && x !== null && !Array.isArray(x);
 const isFiniteNumber = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
@@ -36,7 +37,7 @@ const isIsoDate = (x: unknown): x is string => typeof x === "string" && !Number.
 export const isMetricId = (x: unknown): x is MetricId => typeof x === "string" && (ALL_METRIC_IDS as readonly string[]).includes(x);
 const isMissionDay = (x: unknown): x is number => Number.isInteger(x) && (x as number) >= 1 && (x as number) <= MISSION.totalDays;
 
-const TREND_TABS: readonly TrendTabId[] = ["heartRate", "bloodPressure", "bloodGlucose", "bodyTemperature", "sleepMood", "ared", "radiation"];
+const TREND_TABS: readonly TrendTabId[] = ["heartRate", "bloodPressure", "bloodGlucose", "bodyTemperature", "sleepMood", "ared", "radiation", "pvtHydration"];
 const TREND_WINDOWS: readonly TrendWindow[] = [7, 30, 90, 180];
 
 /* ---------------- user input ---------------- */
@@ -44,7 +45,8 @@ const TREND_WINDOWS: readonly TrendWindow[] = [7, 30, 90, 180];
 export interface MeasurementDraft {
   metricId: MetricId;
   missionDay: string;
-  recordedAtLocal: string;
+  /** Ship time (UTC), "HH:MM". */
+  shipTime: string;
   value: string;
   systolic: string;
   diastolic: string;
@@ -58,7 +60,6 @@ export interface ValidationContext {
   previousCumulativeDose: number;
   /** Lowest later manual dosimeter reading, if any. */
   nextManualDose: number | null;
-  now: number;
 }
 
 export type FieldErrors = Partial<Record<"missionDay" | "recordedAt" | "value" | "systolic" | "diastolic" | "notes", string>>;
@@ -116,9 +117,8 @@ export function validateMeasurement(draft: MeasurementDraft, ctx: ValidationCont
   if (!Number.isInteger(dayNum) || dayNum < 1 || dayNum > MISSION.totalDays) {
     errors.missionDay = `Mission day must be a whole number from 1 to ${MISSION.totalDays}.`;
   }
-  const t = draft.recordedAtLocal ? new Date(draft.recordedAtLocal).getTime() : NaN;
-  if (Number.isNaN(t)) errors.recordedAt = "Enter the date and time of the measurement.";
-  else if (t > ctx.now + 5 * 60_000) errors.recordedAt = "The measurement time cannot be in the future.";
+  const minutes = shipTimeToMinutes(draft.shipTime);
+  if (minutes === null) errors.recordedAt = "Enter the ship time (UTC) as HH:MM, for example 07:30.";
 
   const notes = draft.notes.trim();
   if (notes.length > 280) errors.notes = `Notes must be 280 characters or fewer (currently ${notes.length}).`;
@@ -164,7 +164,7 @@ export function validateMeasurement(draft: MeasurementDraft, ctx: ValidationCont
     ok: true,
     value,
     missionDay: dayNum,
-    recordedAt: new Date(t).toISOString(),
+    recordedAt: missionDayToIso(dayNum, minutes ?? 0),
     ...(notes ? { notes } : {}),
     ...(draft.metricId === "bloodGlucose" ? { glucoseContext: draft.glucoseContext } : {}),
   };
@@ -203,6 +203,7 @@ export function sanitizeMeasurement(x: unknown): VitalMeasurement | null {
     source: x.source,
   };
   if (typeof x.notes === "string" && x.notes.length <= 280) out.notes = x.notes;
+  if (isIsoDate(x.enteredAt)) out.enteredAt = x.enteredAt;
   if (x.glucoseContext === "fasting" || x.glucoseContext === "post-meal" || x.glucoseContext === "other") out.glucoseContext = x.glucoseContext;
   return out;
 }

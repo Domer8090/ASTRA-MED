@@ -2,7 +2,7 @@ import { lazy, Suspense, useMemo } from "react";
 import { MISSION, MOOD } from "../config/thresholds";
 import { useMissionModel } from "../hooks/useMissionModel";
 import { useMissionStore } from "../hooks/useMissionState";
-import { buildChartRows, statusPeriods, windowRange, type ChartRow, type StatusPeriod } from "../services/chartSeries";
+import { buildChartRows, eventAnnotations, statusPeriods, windowRange, type ChartRow, type StatusPeriod } from "../services/chartSeries";
 import type { HealthStatus, TrendWindow } from "../types/health";
 import { formatNumber } from "../utils/formatting";
 import { TABS, type TabDef } from "./charts/trendTabs";
@@ -37,7 +37,7 @@ function summarize(tab: TabDef, rows: ChartRow[], periods: StatusPeriod[], range
 }
 
 export function TrendChartsPanel() {
-  const { days, day, settings, metricDayStatus, diagnostics } = useMissionModel();
+  const { days, day, settings, metricDayStatus, diagnostics, scenario } = useMissionModel();
   const store = useMissionStore();
   const tab = TABS.find((t) => t.id === settings.trendTab) ?? TABS[0]!;
   const range = useMemo(() => windowRange(day, settings.trendWindow, MISSION.totalDays), [day, settings.trendWindow]);
@@ -54,12 +54,13 @@ export function TrendChartsPanel() {
     return statusPeriods(merged, range, day);
   }, [metricDayStatus, tab, range, day]);
   const summary = useMemo(() => summarize(tab, rows, periods, range, day), [tab, rows, periods, range, day]);
+  const annotations = useMemo(() => eventAnnotations(scenario.events, range, day, tab.metrics), [scenario.events, range, day, tab.metrics]);
 
   return (
     <Panel
       id="trends"
-      title="180-day health history"
-      subtitle="Mission-day trends with configured reference ranges. Click the chart to jump to a day."
+      title="Physiological trend"
+      subtitle="Follows the selected system. Green band: configured reference range (demo safe zone, not a NASA standard). Click the chart to jump to a day."
       actions={
         <>
           <ProvenanceTag kind="SYNTHETIC" label="SYNTHETIC DEMO TELEMETRY" />
@@ -116,11 +117,18 @@ export function TrendChartsPanel() {
             day={day}
             range={range}
             {...(tab.id === "ared" ? { target: settings.aredTargetMinutes } : {})}
+            annotations={annotations}
             onPick={(d) => store.setSelectedDay(Math.min(d, MISSION.totalDays))}
           />
           </Suspense>
         </div>
         <p className="mt-2 max-w-[90ch] text-sm text-ink-2">{summary}</p>
+        {annotations.length ? (
+          <p className="mt-1 text-xs text-ink-2">
+            <span className="font-semibold text-ink">Annotated events: </span>
+            {annotations.map((a) => `${a.label} (day ${a.start}${a.end > a.start ? `–${a.end}` : ""})`).join("; ")}. Dashed outlines; scenario events are simulations.
+          </p>
+        ) : null}
         <p className="mt-1 text-2xs text-ink-3">
           Shaded vertical bands mark days the diagnostic engine rated CAUTION or CRITICAL. Green bands are configured reference ranges (prototype assumptions, not NASA safe zones). Data stops at the selected day. Ranges for mood: {MOOD.reference.min}–{MOOD.reference.max} / 5.
           {tab.id === "radiation" ? " Daily dose comes from the synthetic personal dosimeter. Space-weather events never add to it." : ""}

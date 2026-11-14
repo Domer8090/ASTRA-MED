@@ -9,7 +9,7 @@ import { useUiActions, useUiState } from "../hooks/useUi";
 import { cumulativeDoseAt, manualHistory } from "../services/telemetryService";
 import { tasksForDay } from "../engine/readinessEngine";
 import { ALL_METRIC_IDS, type GlucoseContext, type MetricId, type SymptomValue } from "../types/health";
-import { formatLocalDateTime, nowAsLocalInput, padDay } from "../utils/dates";
+import { currentShipTime, formatLocalDateTime, formatReadingStamp } from "../utils/dates";
 import { formatWithUnit, METRIC_UNITS } from "../utils/formatting";
 import { entrySpec, isMetricId, validateMeasurement, type FieldErrors, type MeasurementDraft } from "../utils/validation";
 import { Dialog } from "./shared/Dialog";
@@ -26,7 +26,7 @@ function emptyDraft(metricId: MetricId, day: number): MeasurementDraft {
   return {
     metricId,
     missionDay: String(day),
-    recordedAtLocal: nowAsLocalInput(),
+    shipTime: currentShipTime(),
     value: "",
     systolic: "",
     diastolic: "",
@@ -83,7 +83,6 @@ export function MeasurementForm() {
     const result = validateMeasurement(draft, {
       previousCumulativeDose: cumulativeDoseAt(days, dayNum - 1),
       nextManualDose: laterDoses.length ? Math.min(...laterDoses) : null,
-      now: Date.now(),
     });
     if (!result.ok) {
       setErrors(result.errors);
@@ -165,7 +164,7 @@ export function MeasurementForm() {
             onChange={(e) => {
               const v = e.target.value;
               if (isMetricId(v)) {
-                setDraft((d) => ({ ...emptyDraft(v, Number(d.missionDay) || day), recordedAtLocal: d.recordedAtLocal, missionDay: d.missionDay }));
+                setDraft((d) => ({ ...emptyDraft(v, Number(d.missionDay) || day), shipTime: d.shipTime, missionDay: d.missionDay }));
                 setErrors({});
               }
             }}
@@ -286,17 +285,18 @@ export function MeasurementForm() {
           </div>
           <div>
             <label htmlFor={`${uid}-time`} className="label">
-              Measured at (local time)
+              Ship time (UTC)
             </label>
             <input
               id={`${uid}-time`}
-              name="recordedAt"
-              type="datetime-local"
+              name="shipTime"
+              type="time"
               className="field num mt-1"
-              value={draft.recordedAtLocal}
-              onChange={(e) => set("recordedAtLocal", e.target.value)}
+              value={draft.shipTime}
+              onChange={(e) => set("shipTime", e.target.value)}
               {...err("recordedAt")}
             />
+            <p className="mt-1 text-2xs text-ink-3">Stored as MET on mission day {draft.missionDay || "?"}. The real time you typed it is kept separately.</p>
             <FieldError id={`${uid}-recordedAt-err`} msg={errors.recordedAt} />
           </div>
         </div>
@@ -329,9 +329,8 @@ export function MeasurementForm() {
                 <li key={m.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
                   <span className="min-w-0 text-sm">
                     <span className="num text-ink">{formatWithUnit(m.metricId, m.value)}</span>
-                    <span className="num ml-2 text-ink-2">
-                      D{padDay(m.missionDay)} {formatLocalDateTime(m.recordedAt)}
-                    </span>
+                    <span className="num ml-2 text-ink-2">{formatReadingStamp(m.missionDay, m.recordedAt)}</span>
+                    {m.enteredAt ? <span className="ml-2 text-2xs text-ink-3">entered {formatLocalDateTime(m.enteredAt)}</span> : null}
                   </span>
                   <button
                     type="button"

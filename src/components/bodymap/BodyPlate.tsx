@@ -10,6 +10,10 @@ interface Props {
   onSelect: (id: BodySystemId) => void;
   compact: boolean;
   keyReadings: Record<BodySystemId, string>;
+  /** Active environmental hazard, drawn as an envelope around the figure. Not a dose. */
+  hazard?: { level: string; label: string } | null;
+  /** Systems directly affected by the active hazard; their hotspots get a hazard ring. */
+  hazardSystems?: readonly BodySystemId[];
 }
 
 /** Small status glyph drawn inside a hotspot marker: circle-check, triangle or octagon. */
@@ -41,7 +45,7 @@ function Glyph({ status, x, y }: { status: HealthStatus; x: number; y: number })
 
 const GRID = Array.from({ length: 17 }, (_, i) => i * 40);
 
-export const BodyPlate = memo(function BodyPlate({ systems, selected, onSelect, compact, keyReadings }: Props) {
+export const BodyPlate = memo(function BodyPlate({ systems, selected, onSelect, compact, keyReadings, hazard, hazardSystems = [] }: Props) {
   const uid = useId().replace(/:/g, "");
   const clipId = `body-clip-${uid}`;
   const viewBox = compact ? `${CX - 150} 14 300 612` : "0 0 640 640";
@@ -76,6 +80,15 @@ export const BodyPlate = memo(function BodyPlate({ systems, selected, onSelect, 
           <path key={`t${y}`} d={`M${CX - 172} ${y}h${y % 100 === 0 ? 10 : 5}`} stroke={COLORS.line} strokeWidth="1" />
         ))}
       </g>
+
+      {hazard ? (
+        <g aria-hidden="true">
+          <ellipse cx={CX} cy={322} rx={150} ry={300} fill="none" stroke={hazard.level === "ALL CLEAR" ? COLORS.nominal : COLORS.caution} strokeOpacity="0.55" strokeWidth="1.5" strokeDasharray="6 6" />
+          <text x={CX + 146} y={compact ? 30 : 40} textAnchor="end" fill={hazard.level === "ALL CLEAR" ? COLORS.nominal : COLORS.caution} fontFamily="Barlow Semi Condensed" fontWeight="700" fontSize="12" letterSpacing="0.6">
+            {hazard.label}
+          </text>
+        </g>
+      ) : null}
 
       {/* Silhouette */}
       <g aria-hidden="true">
@@ -164,7 +177,7 @@ export const BodyPlate = memo(function BodyPlate({ systems, selected, onSelect, 
         const st = systems[h.id];
         const isSel = selected === h.id;
         const color = STATUS_COLOR[st.status];
-        const label = `${BODY_SYSTEMS[h.id].name}: ${st.status}. ${isSel ? "Selected." : "Select to show system details."}`;
+        const label = `${BODY_SYSTEMS[h.id].name}: ${st.status}.${hazardSystems.includes(h.id) ? " Directly affected by the active environmental hazard." : ""} ${isSel ? "Selected." : "Select to show system details."}`;
         return (
           <g
             key={h.id}
@@ -190,6 +203,9 @@ export const BodyPlate = memo(function BodyPlate({ systems, selected, onSelect, 
             <circle cx={h.anchor[0]} cy={h.anchor[1]} r="22" fill="transparent" />
             <circle className="hotspot-ring" cx={h.anchor[0]} cy={h.anchor[1]} r="11" fill={COLORS.space} stroke={color} strokeWidth={isSel ? 2.2 : 1.6} />
             {st.status === "CRITICAL" ? <circle cx={h.anchor[0]} cy={h.anchor[1]} r="15" fill="none" stroke={color} strokeWidth="1" strokeOpacity="0.7" /> : null}
+            {hazardSystems.includes(h.id) ? (
+              <circle cx={h.anchor[0]} cy={h.anchor[1]} r="19" fill="none" stroke={COLORS.caution} strokeWidth="1.5" strokeDasharray="3 3" aria-hidden="true" />
+            ) : null}
             <Glyph status={st.status} x={h.anchor[0]} y={h.anchor[1]} />
           </g>
         );

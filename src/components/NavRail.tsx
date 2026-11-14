@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Info } from "lucide-react";
 import { useUiActions } from "../hooks/useUi";
 import { BrandMark } from "./BrandMark";
 import { NAV_ITEMS, scrollToSection, SOURCES_NAV, type SectionId } from "./navigation";
@@ -55,10 +56,19 @@ export function NavRail() {
             );
           })}
         </ul>
-        <div className="border-t border-line px-2 py-3">
+        <div className="flex flex-col gap-1 border-t border-line px-2 py-3">
           <button
             type="button"
             onClick={() => openSources("about")}
+            title="Overview: the problem, how ASTRA-MED works and its NASA data"
+            className="flex w-full flex-col items-center gap-1 rounded-tile px-1 py-2 font-cond text-2xs font-semibold text-ink-2 transition-colors duration-150 hover:bg-raised/60 hover:text-ink"
+          >
+            <Info aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+            Overview
+          </button>
+          <button
+            type="button"
+            onClick={() => openSources("sources")}
             title={SOURCES_NAV.label}
             className="flex w-full flex-col items-center gap-1 rounded-tile px-1 py-2 font-cond text-2xs font-semibold text-ink-2 transition-colors duration-150 hover:bg-raised/60 hover:text-ink"
           >
@@ -69,7 +79,7 @@ export function NavRail() {
       </nav>
 
       <nav aria-label="Console sections" className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-space pb-[env(safe-area-inset-bottom)] lg:hidden">
-        <ul className="grid grid-cols-7">
+        <ul className="grid grid-cols-6">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const current = active === item.id;
@@ -92,8 +102,8 @@ export function NavRail() {
           })}
           <li>
             <button type="button" onClick={() => openSources("about")} className="flex min-h-[56px] w-full flex-col items-center justify-center gap-0.5 font-cond text-[10.5px] font-semibold text-ink-2">
-              <SourcesIcon aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
-              {SOURCES_NAV.short}
+              <Info aria-hidden="true" className="h-5 w-5" strokeWidth={1.8} />
+              About
             </button>
           </li>
         </ul>

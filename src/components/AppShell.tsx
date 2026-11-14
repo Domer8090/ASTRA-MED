@@ -3,19 +3,17 @@ import { useMissionState } from "../hooks/useMissionState";
 import { useSpaceWeather } from "../hooks/useSpaceWeather";
 import { useUiActions } from "../hooks/useUi";
 import { AlertsPanel } from "./AlertsPanel";
-import { BodyMapPanel } from "./BodyMapPanel";
 import { CountermeasureGamification } from "./CountermeasureGamification";
 import { DataSourcesModal } from "./DataSourcesModal";
 import { GuidanceDrawer } from "./GuidanceDrawer";
 import { MeasurementForm } from "./MeasurementForm";
-import { MissionReadinessBanner } from "./MissionReadinessBanner";
+import { MissionConsole } from "./console/MissionConsole";
 import { MissionTrack } from "./MissionTrack";
 import { NavRail } from "./NavRail";
+import { DeepLinks } from "./DeepLinks";
 import { PanelBoundary } from "./shared/ErrorBoundary";
 import { SpaceWeatherPanel } from "./SpaceWeatherPanel";
 import { TopTelemetryBar } from "./TopTelemetryBar";
-import { TrendChartsPanel } from "./TrendChartsPanel";
-import { VitalsGrid } from "./VitalsGrid";
 
 function SystemNotices() {
   const storage = useMissionState((s) => s.storage);
@@ -27,7 +25,7 @@ function SystemNotices() {
       {!online ? (
         <p className="flex items-start gap-2 rounded-tile border border-line-strong bg-panel px-3 py-2 text-sm text-ink">
           <CloudOff aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-caution" />
-          Offline. Every health function keeps working from bundled data and this browser's storage. Space weather shows cached or bundled fallback events only.
+          Offline. Every health function keeps working from bundled data and this browser's storage. The space-weather feed is UNAVAILABLE; cached or archived events stay visible with their labels.
         </p>
       ) : null}
       {!storage.available || !storage.lastWriteOk ? (
@@ -66,35 +64,20 @@ export function AppShell() {
         <div className="md:hidden">
           <MissionTrack />
         </div>
-        <main id="main" tabIndex={-1} className="mx-auto flex max-w-[1680px] flex-col gap-4 px-3 py-4 outline-none md:px-5 md:py-5">
+        <main id="main" tabIndex={-1} className="mx-auto flex max-w-[1760px] flex-col gap-3 px-3 py-3 outline-none md:px-4">
           <SystemNotices />
-          <PanelBoundary name="Mission readiness">
-            <MissionReadinessBanner />
-          </PanelBoundary>
-          <PanelBoundary name="Crew vitals">
-            <VitalsGrid />
-          </PanelBoundary>
-          <PanelBoundary name="Body systems">
-            <BodyMapPanel />
-          </PanelBoundary>
-          <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.55fr)_minmax(380px,1fr)]">
-            <div className="flex min-w-0 flex-col gap-4">
-              <PanelBoundary name="Trend charts">
-                <TrendChartsPanel />
-              </PanelBoundary>
-              <PanelBoundary name="Space weather">
-                <SpaceWeatherPanel />
-              </PanelBoundary>
-            </div>
-            <div className="flex min-w-0 flex-col gap-4">
-              <PanelBoundary name="Countermeasures">
-                <CountermeasureGamification />
-              </PanelBoundary>
-              <PanelBoundary name="Alerts">
-                <AlertsPanel />
-              </PanelBoundary>
-            </div>
+          <MissionConsole />
+          <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(380px,1fr)]">
+            <PanelBoundary name="Countermeasures">
+              <CountermeasureGamification />
+            </PanelBoundary>
+            <PanelBoundary name="Alerts">
+              <AlertsPanel />
+            </PanelBoundary>
           </div>
+          <PanelBoundary name="Space weather">
+            <SpaceWeatherPanel />
+          </PanelBoundary>
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4 text-xs text-ink-3">
             <p className="max-w-[90ch]">
               ASTRA-MED is a NASA Space Apps Challenge 2026 prototype. Synthetic demonstration data and prototype thresholds; not an operational NASA medical device, and not endorsed by NASA.
@@ -103,6 +86,7 @@ export function AppShell() {
           </footer>
         </main>
       </div>
+      <DeepLinks />
       <GuidanceDrawer />
       <MeasurementForm />
       <DataSourcesModal />

@@ -57,6 +57,33 @@ that console copy; guidance prose is sentence case.
 
 ### 2.3 Layout concept
 
+**Revised 2026-11-14.** The first build drifted toward a conventional dashboard
+(big status banner, tall day track, tile grid, body map in its own section). The
+primary console is now one integrated surface:
+
+```
+┌ top bar ─────────────────────────────────────────────────────────────────────┐
+├ slim day track (status ticks, scenario event marks, previous/next alert)     ┤
+├ status line: STATUS · counts · next action · last check                      ┤
+├ crew vitals ────┬──── astronaut (centrepiece) ────┬──── system intelligence ──┤
+│ 8 indicators,   │ body plate, 5 hotspots           │ diagnosis (3 questions),  │
+│ in-system rows  │                                  │ observations, system      │
+│ lit; click =    │                                  │ countermeasures and       │
+│ focus metric    │                                  │ follow-ups, self-check    │
+├─────────────────┴──────────────────────────────────┤                           │
+│ trend for the selected system/metric + reference band                         │
+├ all countermeasures (XP, streak) ──────────┬ alerts + health events ──────────┤
+├ space weather ────────────────────────────────────────────────────────────────┤
+```
+
+Selecting a system or vital updates the vitals highlight, diagnosis, trend tab
+and countermeasures together (`components/console/useConsoleFocus.ts`). Mobile
+order: status, astronaut, intelligence, vitals, trend.
+
+The original concept below is kept for history.
+
+#### Original concept
+
 A four-zone console. The body plate and the mission track carry the
 identity; everything else is quiet and dense.
 

@@ -7,6 +7,7 @@ import { useSpaceWeather } from "../hooks/useSpaceWeather";
 import { useUiActions } from "../hooks/useUi";
 import { formatLocalDate, formatLocalTime, formatMet, padDay } from "../utils/dates";
 import { BrandMark } from "./BrandMark";
+import { ReadinessIndicator } from "./ReadinessIndicator";
 import { ScenarioSelector } from "./ScenarioSelector";
 import { StatusIcon } from "./shared/StatusBadge";
 import { STATUS_TEXT_CLASS } from "../config/theme";
@@ -44,8 +45,24 @@ const WX_STYLE: Record<SpaceWeatherMode, string> = {
   LIVE: "text-nominal",
   PARTIAL: "text-caution",
   CACHED: "text-[#8cb4ff]",
-  DEMO: "text-ink-2",
+  ARCHIVED: "text-ink-2",
+  UNAVAILABLE: "text-[#ff8aa0]",
 };
+
+/** Persistent reminder that health readings, adherence history, XP and targets are demo data. */
+function DemoDataChip({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="chip-tag whitespace-nowrap border-line-strong bg-raised text-ink hover:border-cyan"
+      title="Health telemetry, adherence history, XP, streaks and countermeasure targets are synthetic demo data. NASA DONKI space weather is real. Select for the Overview."
+    >
+      DEMO DATA
+      <span className="sr-only">: synthetic health telemetry and adherence history. Open the Overview.</span>
+    </button>
+  );
+}
 
 export function DayStepper() {
   const store = useMissionStore();
@@ -68,8 +85,22 @@ export function DayStepper() {
 }
 
 export function TopTelemetryBar() {
-  const { day, overall, readiness } = useMissionModel();
-  const { mode, online } = useSpaceWeather();
+  const { day, overall } = useMissionModel();
+  const { mode, online, types } = useSpaceWeather();
+  const liveHosts = new Set(Object.values(types).filter((t) => t.source === "live").map((t) => t.host));
+  const shownSources = new Set(Object.values(types).map((t) => t.source));
+  const wxSource =
+    mode === "UNAVAILABLE"
+      ? `showing ${[...shownSources].join(" + ")}`
+      : mode === "ARCHIVED"
+        ? "May 2024 archive"
+        : mode === "CACHED"
+          ? "saved earlier"
+          : liveHosts.size > 1
+            ? "mixed NASA hosts"
+            : liveHosts.has("ccmc.gsfc.nasa.gov")
+              ? "via CCMC DONKI API"
+              : "via api.nasa.gov";
   const { openSources } = useUiActions();
 
   return (
@@ -80,8 +111,11 @@ export function TopTelemetryBar() {
           <span className="hidden whitespace-nowrap font-cond text-md font-bold tracking-label min-[400px]:inline">ASTRA-MED</span>
         </div>
         <Cell label="Mission" className="hidden md:flex">
-          <span className="block truncate font-cond text-md font-semibold text-ink" title={`${MISSION.name}. Crew ${MISSION.crewLabel}.`}>
-            {MISSION.name}
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="block min-w-0 truncate font-cond text-md font-semibold text-ink" title={`${MISSION.name}. Crew ${MISSION.crewLabel}.`}>
+              {MISSION.name}
+            </span>
+            <DemoDataChip onOpen={() => openSources("about")} />
           </span>
         </Cell>
         <Cell label="Crew" className="hidden 2xl:flex">
@@ -92,8 +126,10 @@ export function TopTelemetryBar() {
         <Cell label="Mission day" className="ml-auto md:ml-0">
           <DayStepper />
         </Cell>
-        <Cell label="MET" className="hidden lg:flex">
-          <MetClock day={day} />
+        <Cell label="MET (replay)" className="hidden lg:flex">
+          <span title={`Mission elapsed time, DDD/HH:MM:SS. Day ${day} runs from MET ${String(day - 1).padStart(3, "0")}/00:00:00 to ${String(day - 1).padStart(3, "0")}/23:59:59. Replay: day from the track, time of day from your clock in UTC (ship time).`}>
+            <MetClock day={day} />
+          </span>
         </Cell>
         <div className="hidden items-center border-l border-line px-3 md:flex">
           <ScenarioSelector />
@@ -106,8 +142,9 @@ export function TopTelemetryBar() {
         </Cell>
         <Cell label="Space weather" className="hidden sm:flex">
           <button type="button" onClick={() => document.getElementById("weather")?.scrollIntoView({ block: "start" })} className={`flex items-center gap-1.5 font-cond text-sm font-bold tracking-status ${WX_STYLE[mode]}`} title="NASA DONKI data state">
-            {mode === "LIVE" || mode === "PARTIAL" ? <Satellite aria-hidden="true" className="h-4 w-4" /> : mode === "CACHED" ? <Globe aria-hidden="true" className="h-4 w-4" /> : <CloudOff aria-hidden="true" className="h-4 w-4" />}
-            {mode}
+            {mode === "LIVE" || mode === "PARTIAL" ? <Satellite aria-hidden="true" className="h-4 w-4" /> : mode === "CACHED" || mode === "ARCHIVED" ? <Globe aria-hidden="true" className="h-4 w-4" /> : <CloudOff aria-hidden="true" className="h-4 w-4" />}
+            {mode === "PARTIAL" ? "PARTIAL LIVE" : mode}
+            <span className="hidden font-sans text-2xs font-normal normal-case tracking-normal text-ink-3 xl:inline">{wxSource}</span>
           </button>
         </Cell>
         <Cell label="Local time" className="hidden 2xl:flex">
@@ -120,19 +157,17 @@ export function TopTelemetryBar() {
           </span>
         </Cell>
         <Cell label="Readiness" className="hidden sm:flex">
-          <button type="button" onClick={() => openSources("about")} className="num text-left text-md font-semibold text-ink" title="Prototype engagement score, not a medical clearance. Open About for details.">
-            {readiness.score}
-            <span className="text-ink-3">/100</span>
-          </button>
+          <ReadinessIndicator />
         </Cell>
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-1.5 md:hidden">
         <ScenarioSelector compact />
+        <DemoDataChip onOpen={() => openSources("about")} />
         <span className={`flex items-center gap-1 font-cond text-xs font-bold ${online ? "text-ink-2" : "text-caution"}`}>
           {online ? <Wifi aria-hidden="true" className="h-3.5 w-3.5" /> : <WifiOff aria-hidden="true" className="h-3.5 w-3.5" />}
           {online ? "ONLINE" : "OFFLINE"}
         </span>
-        <span className={`font-cond text-xs font-bold sm:hidden ${WX_STYLE[mode]}`}>WX {mode}</span>
+        <span className={`font-cond text-xs font-bold sm:hidden ${WX_STYLE[mode]}`}>WX {mode === "PARTIAL" ? "PARTIAL" : mode}</span>
       </div>
     </header>
   );

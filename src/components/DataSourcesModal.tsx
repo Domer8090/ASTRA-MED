@@ -1,7 +1,8 @@
 import { useEffect, useId, useState, type FormEvent } from "react";
 import { DatabaseZap, ExternalLink, HardDrive, RotateCcw, ShieldCheck } from "lucide-react";
 import { ARED, describeThresholds, HYDRATION, MISSION } from "../config/thresholds";
-import { FALLBACK_PROVENANCE } from "../data/fallbackDonki";
+import { ARCHIVE_PROVENANCE } from "../data/fallbackDonki";
+import { SEP_DOSE_MODEL_SUMMARY } from "../data/scenarioHazards";
 import { LIMITATIONS_STATEMENT, OSDR_STUDIES, REFERENCE_SOURCES } from "../data/sources";
 import { useMissionState, useMissionStore } from "../hooks/useMissionState";
 import { useToast } from "../hooks/useToast";
@@ -12,7 +13,7 @@ import { Dialog } from "./shared/Dialog";
 import { PROVENANCE_DESCRIPTIONS, ProvenanceTag, type Provenance } from "./shared/ProvenanceTag";
 
 const TABS: { id: SourcesTab; label: string }[] = [
-  { id: "about", label: "About" },
+  { id: "about", label: "Overview" },
   { id: "sources", label: "Data sources" },
   { id: "thresholds", label: "Thresholds" },
   { id: "labels", label: "Data labels" },
@@ -26,48 +27,112 @@ const PROV_TAG: Record<ThresholdProvenance, Provenance> = {
 };
 
 function About() {
+  const { openSources } = useUiActions();
+  const steps = [
+    {
+      title: "Sense and log",
+      text: "Vital signs, sleep, mood, exercise and dosimeter readings (synthetic demo telemetry or your own entries), plus NASA DONKI space-weather records fetched live when online.",
+    },
+    {
+      title: "Deterministic triage",
+      text: "A rules engine compares each reading with its configured prototype range, checks whether a change persists over several days, flags stale data and rolls the result up to five body systems. Every status keeps the rule that produced it.",
+    },
+    {
+      title: "Guided action",
+      text: "Plain-English self-checks and countermeasures, ordered by priority, each naming its source indicator, rule and scientific context or prototype assumption. Records stay on board for the flight surgeon.",
+    },
+  ];
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       <div>
-        <h3 className="font-cond text-lg font-bold text-ink">ASTRA-MED: Crew Health. Mission Ready.</h3>
-        <p className="mt-1 max-w-[70ch] text-base text-ink-2">
-          A local-first health console for long-duration spaceflight. Between Mars and Earth, one-way signal delay ranges from about 3 to 22 minutes, so a question and its answer can take most of an hour. ASTRA-MED keeps vital signs, trends, self-check instructions and approved countermeasures on board, so a crew member who is not a physician can see what changed, why it matters in space, and what the protocol says to do next.
+        <h3 className="font-cond text-xl font-bold text-ink">ASTRA-MED: Crew Health. Mission Ready.</h3>
+        <p className="mt-2 max-w-[70ch] text-base text-ink">
+          <span className="font-semibold">The problem.</span> Between Mars and Earth a radio signal takes about 3 to 22 minutes each way, so a question to the flight surgeon and its answer can take most of an hour. Deep-space crews need to triage routine health questions on board, without waiting for the ground.
         </p>
       </div>
+
+      <div id="demo-data" className="rounded-tile border border-line-strong p-4">
+        <h4 className="flex items-center gap-2 font-cond text-md font-bold text-ink">
+          <span className="chip-tag border-line-strong bg-raised text-ink">DEMO DATA</span>
+          What is simulated and what is real
+        </h4>
+        <dl className="mt-2 grid gap-3 text-sm md:grid-cols-3">
+          <div>
+            <dt className="font-semibold text-ink">Synthetic (demo)</dt>
+            <dd className="mt-0.5 text-ink-2">
+              180 days of health telemetry, the adherence history for days you have not marked, the XP and streaks derived from it, the countermeasure targets, and the scenario events, including the Scenario C dosimeter overlay. None of it is real astronaut data.
+            </dd>
+          </div>
+          <div>
+            <dt className="font-semibold text-ink">Real NASA data</dt>
+            <dd className="mt-0.5 text-ink-2">
+              DONKI space-weather records, labelled LIVE, CACHED or ARCHIVED by where they came from, and the NASA references cited with each recommendation.
+            </dd>
+          </div>
+          <div>
+            <dt className="font-semibold text-ink">Yours</dt>
+            <dd className="mt-0.5 text-ink-2">
+              Measurements you log (tagged MANUAL) and tasks you mark. They stay in this browser and override the demo values for that day.
+            </dd>
+          </div>
+        </dl>
+      </div>
+
       <div>
-        <h4 className="label">How a check works</h4>
-        <ol className="mt-2 space-y-2">
-          {[
-            "Readings arrive from synthetic demo telemetry or from your own entries.",
-            "A deterministic rules engine compares each reading with its configured range, checks persistence over several days and flags stale data.",
-            "Status propagates to the vital cards, the body map and the readiness banner.",
-            "Each alert links to plain-English guidance and a pre-approved follow-up action.",
-            "Everything is saved locally for later review by the flight surgeon when communication is available.",
-          ].map((s, i) => (
-            <li key={s} className="flex gap-3 text-base text-ink">
-              <span className="num mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-badge border border-line-strong text-2xs text-ink-2">{i + 1}</span>
-              {s}
+        <h4 className="label">How ASTRA-MED works</h4>
+        <ol className="mt-2 grid gap-3 md:grid-cols-3">
+          {steps.map((s, i) => (
+            <li key={s.title} className="rounded-tile border border-line p-3">
+              <p className="flex items-center gap-2 font-cond text-md font-bold text-ink">
+                <span className="num flex h-6 w-6 items-center justify-center rounded-badge border border-cyan/60 text-xs text-cyan">{i + 1}</span>
+                {s.title}
+              </p>
+              <p className="mt-1.5 text-sm text-ink-2">{s.text}</p>
             </li>
           ))}
         </ol>
       </div>
-      <div className="rounded-tile border border-caution/45 bg-caution/[0.06] p-4">
-        <h4 className="label text-caution">Limitations</h4>
-        <p className="mt-1 text-base text-ink">{LIMITATIONS_STATEMENT}</p>
+
+      <div>
+        <h4 className="label">Real NASA data and references</h4>
+        <ul className="mt-2 space-y-2 text-sm">
+          <li className="rounded-tile border border-line p-3">
+            <span className="font-semibold text-ink">Live: NASA DONKI space weather.</span>{" "}
+            <span className="text-ink-2">Flares, solar energetic particle events, CMEs and notifications from the CCMC DONKI API and api.nasa.gov, labelled LIVE only after a successful request in this session. Environmental context; never a personal dose.</span>
+          </li>
+          <li className="rounded-tile border border-line p-3">
+            <span className="font-semibold text-ink">Reference: NASA Human Research Program.</span>{" "}
+            <span className="text-ink-2">Spaceflight Standard Measures and the HRP risk pages for SANS, sleep and schedules, and cardiorespiratory and musculoskeletal fitness give the scientific context shown with each recommendation.</span>
+          </li>
+          <li className="rounded-tile border border-line p-3">
+            <span className="font-semibold text-ink">Research review: NASA OSDR studies</span>{" "}
+            <span className="num text-ink">OSD-817, OSD-987, OSD-989, OSD-1018</span>
+            <span className="text-ink-2">, checked against OSDR metadata. They inform the research context only and do not validate any ASTRA-MED threshold.</span>
+          </li>
+        </ul>
+        <button type="button" className="link mt-2 text-sm" onClick={() => openSources("sources")}>
+          See every source and what it is used for
+        </button>
       </div>
+
       <div className="grid gap-3 sm:grid-cols-2">
+        <div className="rounded-tile border border-line p-3">
+          <h4 className="label">Three-scenario demo</h4>
+          <p className="mt-1 text-sm text-ink-2">
+            A, nominal mission (day 42). B, cardiovascular caution (day 118). C, simulated solar particle event (days 130–134). Mission day 1 is a fictional demo epoch; day N spans MET (N−1)/00:00 to 23:59 ship time (UTC).
+          </p>
+        </div>
         <div className="rounded-tile border border-line p-3">
           <h4 className="label">Readiness score</h4>
           <p className="mt-1 text-sm text-ink-2">
-            A prototype engagement indicator: 50% today's task completion, 20% the 7-day adherence average, 15% follow-ups addressed and 15% fresh measurements. It is not a medical clearance, and a high score never hides a CAUTION or CRITICAL status.
+            Engagement indicator for the countermeasure plan: 50 points for today&apos;s tasks, 20 for 7-day adherence, 15 for follow-ups done and 15 for fresh measurements. Select the score in the top bar to see today&apos;s parts. Not a medical clearance; it never hides a CAUTION or CRITICAL.
           </p>
         </div>
-        <div className="rounded-tile border border-line p-3">
-          <h4 className="label">Demo mission</h4>
-          <p className="mt-1 text-sm text-ink-2">
-            {MISSION.name}, {MISSION.totalDays} days, crew {MISSION.crewLabel}. Three deterministic scenarios: A nominal, B cardiovascular caution, C solar particle event.
-          </p>
-        </div>
+      </div>
+
+      <div className="rounded-tile border border-caution/45 bg-caution/[0.06] p-4">
+        <h4 className="label text-caution">Limitations</h4>
+        <p className="mt-1 text-base text-ink">{LIMITATIONS_STATEMENT}</p>
       </div>
     </div>
   );
@@ -114,8 +179,14 @@ function Sources() {
       </div>
       <div className="rounded-tile border border-line p-3 text-sm text-ink-2">
         <p>
-          <span className="font-semibold text-ink">Offline DONKI sample: </span>
-          real archived records from {FALLBACK_PROVENANCE.window.start} to {FALLBACK_PROVENANCE.window.end}, retrieved from {FALLBACK_PROVENANCE.source}. Always labelled DEMO / OFFLINE FALLBACK.
+          <span className="font-semibold text-ink">Scenario C dosimeter model: </span>
+          {SEP_DOSE_MODEL_SUMMARY}
+        </p>
+      </div>
+      <div className="rounded-tile border border-line p-3 text-sm text-ink-2">
+        <p>
+          <span className="font-semibold text-ink">Offline DONKI archive: </span>
+          real archived records from {ARCHIVE_PROVENANCE.window.start} to {ARCHIVE_PROVENANCE.window.end}, retrieved from {ARCHIVE_PROVENANCE.source}. Always labelled ARCHIVED (offline fallback), never live.
         </p>
       </div>
     </div>
@@ -166,13 +237,13 @@ function Thresholds() {
 }
 
 function Labels() {
-  const kinds: Provenance[] = ["SYNTHETIC", "MANUAL", "LIVE", "PARTIAL", "CACHED", "FALLBACK", "SCENARIO", "SUPPLIED PROTOTYPE", "ASTRA ASSUMPTION", "MISSION PLAN"];
+  const kinds: Provenance[] = ["SYNTHETIC", "MANUAL", "LIVE", "PARTIAL", "CACHED", "ARCHIVED", "UNAVAILABLE", "SCENARIO", "SUPPLIED PROTOTYPE", "ASTRA ASSUMPTION", "MISSION PLAN"];
   return (
     <dl className="divide-y divide-line rounded-tile border border-line">
       {kinds.map((k) => (
         <div key={k} className="flex flex-col gap-1 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-4">
           <dt className="w-44 shrink-0">
-            <ProvenanceTag kind={k} label={k === "FALLBACK" ? "DEMO / OFFLINE FALLBACK" : k} />
+            <ProvenanceTag kind={k} label={k === "PARTIAL" ? "PARTIAL LIVE" : k} />
           </dt>
           <dd className="text-sm text-ink-2">{PROVENANCE_DESCRIPTIONS[k]}</dd>
         </div>
@@ -308,7 +379,7 @@ export function DataSourcesModal() {
   const { closeSources, openSources } = useUiActions();
   const tab = sourcesTab ?? "about";
   return (
-    <Dialog open={sourcesTab !== null} onClose={closeSources} title="Data sources and about" labelId="sources-title" widthClass="max-w-4xl">
+    <Dialog open={sourcesTab !== null} onClose={closeSources} title="Overview and data sources" labelId="sources-title" widthClass="max-w-4xl">
       <div className="sticky top-0 z-10 border-b border-line bg-raised px-5 pt-2">
         <div role="tablist" aria-label="Data sources sections" className="relative -mb-px flex gap-1 overflow-x-auto">
           {TABS.map((t) => (

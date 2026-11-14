@@ -1,16 +1,16 @@
 /**
- * Bundled offline DONKI fallback.
+ * Bundled DONKI archive used when no live or cached data exists.
  *
- * Real archived DONKI records from 2024-05-08 to 2024-05-16 (May 2024 solar
- * storm period), retrieved from the NASA CCMC DONKI web service and trimmed by
- * scripts/build-donki-fallback.mjs. Shown only as DEMO / OFFLINE FALLBACK and
- * never presented as live or current conditions.
+ * Real historical DONKI records from 2024-05-08 to 2024-05-16 (the May 2024
+ * solar storm period), retrieved from the NASA CCMC DONKI service and trimmed by
+ * scripts/build-donki-fallback.mjs. Labelled ARCHIVED and never presented as
+ * live or current conditions.
  */
 import raw from "./generated/donki-fallback.json";
 import { normalizeList, sortEvents } from "../services/nasaDonkiApi";
-import type { DonkiEvent } from "../types/health";
+import type { DonkiEvent, DonkiEventType } from "../types/health";
 
-interface FallbackFile {
+interface ArchiveFile {
   provenance: { source: string; endpoint: string; window: { start: string; end: string }; retrievedAt: string; note: string };
   FLR: unknown[];
   SEP: unknown[];
@@ -18,20 +18,25 @@ interface FallbackFile {
   notifications: unknown[];
 }
 
-const file = raw as FallbackFile;
+const file = raw as ArchiveFile;
 
-export const FALLBACK_PROVENANCE = file.provenance;
+export const ARCHIVE_PROVENANCE = file.provenance;
 
-let cached: DonkiEvent[] | null = null;
+let cached: Record<DonkiEventType, DonkiEvent[]> | null = null;
 
-export function getFallbackEvents(): DonkiEvent[] {
+export function getArchivedEventsByType(): Record<DonkiEventType, DonkiEvent[]> {
   if (!cached) {
-    cached = sortEvents([
-      ...normalizeList("FLR", file.FLR, "fallback"),
-      ...normalizeList("SEP", file.SEP, "fallback"),
-      ...normalizeList("CME", file.CME, "fallback"),
-      ...normalizeList("NOTIFICATION", file.notifications, "fallback"),
-    ]);
+    cached = {
+      FLR: sortEvents(normalizeList("FLR", file.FLR, "archived")),
+      SEP: sortEvents(normalizeList("SEP", file.SEP, "archived")),
+      CME: sortEvents(normalizeList("CME", file.CME, "archived")),
+      NOTIFICATION: sortEvents(normalizeList("NOTIFICATION", file.notifications, "archived")),
+    };
   }
   return cached;
+}
+
+export function getArchivedEvents(): DonkiEvent[] {
+  const t = getArchivedEventsByType();
+  return sortEvents([...t.FLR, ...t.SEP, ...t.CME, ...t.NOTIFICATION]);
 }

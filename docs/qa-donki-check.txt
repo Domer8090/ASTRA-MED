@@ -1,0 +1,9 @@
+Range 2026-10-15 to 2026-11-14 (UTC), key DEMO_KEY
+FLR           ccmc.gsfc.nasa.gov/DONKI-API/get HTTP 200   525 ms 13 records, 13 with beginTime, 0 unparseable, newest 2026-11-11T21:06Z
+FLR           api.nasa.gov/DONKI               HTTP 429   142 ms 
+SEP           ccmc.gsfc.nasa.gov/DONKI-API/get HTTP 200   119 ms 0 records, 0 with eventTime, 0 unparseable, newest -
+SEP           api.nasa.gov/DONKI               HTTP 429    37 ms 
+CME           ccmc.gsfc.nasa.gov/DONKI-API/get HTTP 200   592 ms 86 records, 86 with startTime, 0 unparseable, newest 2026-11-13T21:24Z
+CME           api.nasa.gov/DONKI               HTTP 429    34 ms 
+notifications ccmc.gsfc.nasa.gov/DONKI-API/get HTTP 200   344 ms 32 records, 32 with messageIssueTime, 0 unparseable, newest 2026-11-13T16:25Z
+notifications api.nasa.gov/DONKI               HTTP 429    33 ms 

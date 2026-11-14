@@ -32,12 +32,26 @@ npm run preview    # http://localhost:4173
 Checks:
 
 ```bash
-npm run check      # TypeScript, ESLint, 53 unit tests
+npm run check      # TypeScript, ESLint, 67 unit tests
 ```
+
+```bash
+npm run donki:check      # live check of each DONKI endpoint on both hosts
+```
+
+```bash
+npm run qa:screenshots   # screenshots of every major view (needs npm run preview running)
+```
+
+Reports: [`DATA_SOURCES.md`](DATA_SOURCES.md) (data provenance audit) and
+[`docs/QA_REPORT.md`](docs/QA_REPORT.md) (final QA with screenshots).
 
 ## NASA API key
 
-DONKI requests use `VITE_NASA_API_KEY`, falling back to `DEMO_KEY`.
+DONKI requests go to the documented CCMC DONKI API
+(`https://ccmc.gsfc.nasa.gov/DONKI-API/get/`, no key) and to
+`api.nasa.gov/DONKI` with `VITE_NASA_API_KEY`, falling back to `DEMO_KEY`. With
+DEMO_KEY the CCMC host is tried first.
 
 ```bash
 cp .env.example .env.local   # then set VITE_NASA_API_KEY=your_key

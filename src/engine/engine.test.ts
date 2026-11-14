@@ -171,7 +171,7 @@ describe("radiation rebasing", () => {
 describe("advisories", () => {
   it("only recent live or cached DONKI SEP events raise an advisory", () => {
     const now = Date.parse("2026-11-13T12:00:00Z");
-    const ev = (dataSource: "live" | "cached" | "fallback", startTime: string) => ({
+    const ev = (dataSource: "live" | "cached" | "archived", startTime: string) => ({
       id: "x",
       type: "SEP" as const,
       title: "SEP",
@@ -182,7 +182,7 @@ describe("advisories", () => {
       linkedIds: [],
     });
     expect(donkiAdvisories([ev("live", "2026-11-12T12:00Z")], now)).toHaveLength(1);
-    expect(donkiAdvisories([ev("fallback", "2026-11-12T12:00Z")], now)).toHaveLength(0);
+    expect(donkiAdvisories([ev("archived", "2026-11-12T12:00Z")], now)).toHaveLength(0);
     expect(donkiAdvisories([ev("cached", "2026-11-01T12:00Z")], now)).toHaveLength(0);
   });
 });
@@ -247,17 +247,77 @@ describe("countermeasures and readiness", () => {
     expect(overall.status).toBe("CAUTION");
   });
 
+  it("readiness parts carry their weights and add up to the score", () => {
+    const i = input("nominal");
+    const diags = evaluateAllMetrics(i, 42);
+    const r = computeReadiness({ ...base(), days: i.days }, 42, [], diags);
+    expect(r.components.map((c) => c.weight)).toEqual([50, 20, 15, 15]);
+    expect(r.components.every((c) => c.fraction >= 0 && c.fraction <= 1)).toBe(true);
+    expect(Math.round(r.components.reduce((s, c) => s + c.points, 0))).toBe(r.score);
+    const tasksPart = r.components.find((c) => c.id === "tasks")!;
+    expect(tasksPart.fraction).toBeCloseTo(r.taskCompletion);
+  });
+
   it("follow-ups come from cautions, advisories and missed tasks", () => {
     const i = input("sep");
     const diags = evaluateAllMetrics(i, 131);
     const adv = scenarioAdvisories("sep", 131);
     const ri: ReadinessInput = { ...base(), scenarioId: "sep", days: i.days };
     const f = buildFollowUps({ day: 131, diagnostics: diags, advisories: adv, yesterdayTasks: tasksForDay(ri, 130), taskDefinitions: tasks, log: {} });
-    expect(f.some((x) => x.id === "metric:radiation")).toBe(true);
-    expect(f.some((x) => x.kind === "advisory")).toBe(true);
-    const done = buildFollowUps({ day: 131, diagnostics: diags, advisories: adv, yesterdayTasks: [], taskDefinitions: tasks, log: { 131: { "metric:radiation": "2026-11-13T00:00:00Z" } } });
-    expect(done.find((x) => x.id === "metric:radiation")?.completed).toBe(true);
+    // The active hazard owns the dosimeter follow-up: one ordered sequence, no duplicate.
+    expect(f.some((x) => x.id === "metric:radiation")).toBe(false);
+    const seq = f.filter((x) => x.kind === "advisory");
+    expect(seq).toHaveLength(1);
+    expect(seq[0]!.steps?.length).toBe(4);
+    expect(seq[0]!.steps?.some((s) => s.alsoResolves)).toBe(true);
+    expect(f[0]!.kind).toBe("advisory");
+    expect(f.every((x) => x.basis.indicator.length > 0 && x.basis.rule.length > 0)).toBe(true);
+    const done = buildFollowUps({ day: 131, diagnostics: diags, advisories: adv, yesterdayTasks: [], taskDefinitions: tasks, log: { 131: { "hazard:scenario:warn-shelter": "2026-11-13T00:00:00Z" } } });
+    const s2 = done.find((x) => x.kind === "advisory")!;
+    expect(s2.steps?.[0]?.completed).toBe(true);
+    expect(s2.action).toMatch(/^Step 2 of 4/);
     const action = mostImportantAction(f, tasksForDay(ri, 131), 131);
     expect(action.source).toBe("follow-up");
+  });
+});
+
+describe("scenario C hazard assessment", () => {
+  it("runs WATCH, WARNING, WARNING, WATCH, ALL CLEAR across days 130–134 and nothing outside", () => {
+    expect(scenarioAdvisories("sep", 129)).toHaveLength(0);
+    expect([130, 131, 132, 133, 134].map((d) => scenarioAdvisories("sep", d)[0]?.level)).toEqual(["WATCH", "WARNING", "WARNING", "WATCH", "ALL CLEAR"]);
+    expect(scenarioAdvisories("sep", 135)).toHaveLength(0);
+    expect(scenarioAdvisories("cardiovascular", 131)).toHaveLength(0);
+  });
+
+  it("relates the event to systems and gives protective actions with a basis", () => {
+    const a = scenarioAdvisories("sep", 131)[0]!;
+    expect(a.relations.map((r) => r.id)).toEqual(expect.arrayContaining(["immuneRadiation", "neuroOcular", "metabolicCircadian", "musculoskeletal"]));
+    expect(a.relations.find((r) => r.id === "immuneRadiation")?.relation).toBe("Direct");
+    expect(a.actions.length).toBeGreaterThanOrEqual(3);
+    expect(a.actions.every((x) => x.basis.provenance === "scenario-simulation")).toBe(true);
+    expect(JSON.stringify(a)).not.toMatch(/\d+(\.\d+)?\s?mSv/);
+  });
+
+  it("hazard never changes health status; the dosimeter overlay does, and only in scenario C", () => {
+    const diagsC = evaluateAllMetrics(input("sep"), 130);
+    expect(aggregateStatus(diagsC, scenarioAdvisories("sep", 130)).status).toBe("NOMINAL");
+    const systems = evaluateBodySystems(diagsC, scenarioAdvisories("sep", 130));
+    expect(systems.immuneRadiation.status).toBe("NOMINAL");
+    expect(systems.immuneRadiation.advisories).toHaveLength(1);
+    expect(systems.cardiovascular.advisories).toHaveLength(0);
+    expect(evaluateMetric(input("sep"), "radiation", 131).status).toBe("CAUTION");
+    expect(evaluateMetric(input("nominal"), "radiation", 131).status).toBe("NOMINAL");
+  });
+
+  it("every diagnostic carries a basis with indicator, rule and provenance", () => {
+    const all = evaluateAllMetrics(input("cardiovascular"), 118);
+    for (const d of Object.values(all)) {
+      expect(d.basis.indicator).toBeTruthy();
+      expect(d.basis.rule).toBeTruthy();
+      expect(d.basis.referenceNote).toBeTruthy();
+    }
+    expect(all.heartRate.basis.provenance).toBe("supplied-prototype");
+    expect(all.heartRate.basis.rule).toMatch(/> 85 bpm/);
+    expect(all.bloodGlucose.basis.reference).toBeNull();
   });
 });

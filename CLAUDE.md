@@ -19,6 +19,8 @@ npm run dev        # http://localhost:5173
 npm run check      # typecheck + lint + tests
 npm run build      # production build into dist/
 npm run preview    # serve dist/ (service worker active here only)
+npm run donki:check      # live per-endpoint DONKI check (both hosts)
+npm run qa:screenshots   # CDP screenshots of every major view into docs/qa (needs preview running)
 ```
 
 ## Non-negotiable product rules
@@ -39,8 +41,14 @@ npm run preview    # serve dist/ (service worker active here only)
 6. Synthetic telemetry is always labelled `SYNTHETIC`. Never call it real
    astronaut data.
 7. Space weather is an environmental hazard, not personal dose. DONKI data
-   never populates mSv values. Label `LIVE`, `CACHED` or `DEMO / OFFLINE
-   FALLBACK` honestly. Scenario events are labelled `SCENARIO`.
+   never populates mSv values. `LIVE` means a successful response in the
+   current session; otherwise `CACHED`, `ARCHIVED` or `UNAVAILABLE` (see
+   DATA_SOURCES.md §3). Scenario events are labelled `SCENARIO SIMULATION`; the
+   scenario C dosimeter overlay is documented in `src/data/scenarioHazards.ts`.
+12. Every recommendation carries a `RecommendationBasis` (indicator, rule,
+    provenance, reference or "no source"). Show it with `BasisLine`.
+13. Mission time: day N = MET (N−1)/00:00–23:59 ship time (UTC). Use
+    `missionDayToIso` / `formatReadingStamp`; real-world times stay local dates.
 8. The app must load, log, recalculate and chart with no network and no API
    key. API failure must never throw into the UI.
 9. Health data stays in the browser. Never send measurements anywhere and
@@ -97,5 +105,5 @@ npm run preview    # serve dist/ (service worker active here only)
   open http://localhost:5173 in the browser pane by URL.
 - The embedded browser pane refuses service-worker registration, so test
   `public/sw.js` offline caching in a normal browser against `npm run preview`.
-- `api.nasa.gov/DONKI/FLR` returned 404 on 2026-11-13; the client falls back to
-  the CCMC host per endpoint. A 404 in the console for FLR is expected.
+- DONKI hosts: CCMC documented base `https://ccmc.gsfc.nasa.gov/DONKI-API/get/`
+  (no trailing slash) and api.nasa.gov. DEMO_KEY is often exhausted (HTTP 429).

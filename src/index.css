@@ -47,7 +47,7 @@
 
 @media (min-width: 768px) {
   :root {
-    --sticky-offset: 168px;
+    --sticky-offset: 108px;
   }
 }
 
@@ -323,5 +323,38 @@ dialog[open].t-drawer {
     transition-duration: 0.01ms !important;
     transition-delay: 0ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Primary console layout. Mobile: astronaut first. Desktop: vitals | astronaut | intel, trend under the first two. */
+.console-grid {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "astro" "intel" "vitals" "trend";
+}
+.console-grid > * {
+  min-width: 0;
+}
+.console-grid > * > .panel,
+.console-grid > * > section {
+  height: 100%;
+}
+/* The system panel is as tall as its content; it never stretches into an empty box. */
+.console-grid > .intel-cell {
+  align-self: start;
+}
+.console-grid > .intel-cell > section {
+  height: auto;
+}
+@media (min-width: 768px) {
+  .console-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-areas: "astro intel" "vitals intel" "trend trend";
+  }
+}
+@media (min-width: 1280px) {
+  .console-grid {
+    grid-template-columns: minmax(270px, 0.82fr) minmax(470px, 1.3fr) minmax(340px, 1fr);
+    grid-template-areas: "vitals astro intel" "trend trend intel";
+    grid-template-rows: auto 1fr;
   }
 }

@@ -1,11 +1,10 @@
-import { Activity, BookOpen, CloudSun, HeartPulse, LayoutDashboard, LineChart, ListChecks, PersonStanding } from "lucide-react";
+import { Activity, BellRing, BookOpen, CloudSun, LineChart, ListChecks, PersonStanding } from "lucide-react";
 
 export const NAV_ITEMS = [
-  { id: "overview", label: "Mission Overview", short: "Overview", icon: LayoutDashboard },
-  { id: "vitals", label: "Crew Health", short: "Vitals", icon: HeartPulse },
-  { id: "body", label: "Body Systems", short: "Body", icon: PersonStanding },
+  { id: "overview", label: "Medical console: crew health and body systems", short: "Console", icon: PersonStanding },
   { id: "trends", label: "Trends", short: "Trends", icon: LineChart },
   { id: "countermeasures", label: "Countermeasures", short: "Tasks", icon: ListChecks },
+  { id: "alerts", label: "Alerts and health events", short: "Alerts", icon: BellRing },
   { id: "weather", label: "Space Weather", short: "Weather", icon: CloudSun },
 ] as const;
 
@@ -20,6 +19,11 @@ export function scrollToSection(id: string): void {
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   el.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
   history.replaceState(null, "", `#${id}`);
+  // Some embedded or throttled browsers never finish a smooth scroll; land on the section anyway.
+  window.setTimeout(() => {
+    const offset = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--sticky-offset")) || 0;
+    if (Math.abs(el.getBoundingClientRect().top - offset) > 48) el.scrollIntoView({ behavior: "auto", block: "start" });
+  }, 700);
   // Move focus for keyboard and screen-reader users without a second scroll.
   const heading = el.querySelector<HTMLElement>("h2");
   if (heading) {
