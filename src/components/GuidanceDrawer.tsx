@@ -1,4 +1,4 @@
-import { LineChart, Plus } from "lucide-react";
+import { ChevronDown, LineChart, Plus } from "lucide-react";
 import type { ReactNode } from "react";
 import { BODY_SYSTEMS } from "../data/bodySystems";
 import { GUIDANCE_DISCLAIMER, METRIC_GUIDANCE } from "../data/metricGuidance";
@@ -17,8 +17,8 @@ import { BasisLine } from "./shared/BasisLine";
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="border-t border-line px-5 py-4 first:border-t-0">
-      <h3 className="label">{title}</h3>
-      <div className="mt-1.5 text-base leading-relaxed text-ink">{children}</div>
+      <h3 className="text-sm font-semibold text-ink-2">{title}</h3>
+      <div className="mt-1.5 text-md leading-relaxed text-ink">{children}</div>
     </section>
   );
 }
@@ -29,27 +29,32 @@ const PROV: Record<RuleTrace["provenance"], "SUPPLIED PROTOTYPE" | "ASTRA ASSUMP
   "mission-plan": "MISSION PLAN",
 };
 
-function ThreeQuestions({ d }: { d: MetricDiagnostic }) {
+/** The three things a crew member needs, in large type. */
+function ThreeQuestions({ d, howToMeasure }: { d: MetricDiagnostic; howToMeasure: readonly string[] }) {
   const tone = d.status === "CRITICAL" ? "border-critical/60" : d.status === "CAUTION" ? "border-caution/55" : "border-line";
   return (
-    <div className={`mx-5 mt-4 rounded-tile border ${tone} bg-panel`}>
-      <dl className="divide-y divide-line">
-        <div className="px-4 py-3">
-          <dt className="label">What changed</dt>
-          <dd className="mt-1 text-base text-ink">{d.summary}</dd>
-        </div>
-        <div className="px-4 py-3">
-          <dt className="label">Why it might matter in space</dt>
-          <dd className="mt-1 text-base text-ink-2">{d.explanation}</dd>
-        </div>
-        <div className="px-4 py-3">
-          <dt className="label text-cyan">What to do next</dt>
-          <dd className="mt-1 text-base text-ink">{d.recommendedNextStep}</dd>
-        </div>
-      </dl>
-      {d.notes.length > 0 ? <p className="border-t border-line px-4 py-2 text-sm text-ink-2">{d.notes.join(" ")}</p> : null}
-      <div className="border-t border-line px-4 pb-3">
-        <BasisLine basis={d.basis} />
+    <div className="mx-5 mt-4 flex flex-col gap-3">
+      <div className={`rounded-tile border ${tone} bg-panel px-4 py-4`}>
+        <p className="text-sm font-semibold text-ink-2">Right now</p>
+        <p className="mt-1 text-lg leading-snug text-ink">{d.summary}</p>
+      </div>
+      <div className="rounded-tile border border-cyan/40 bg-cyan/5 px-4 py-4">
+        <p className="text-sm font-semibold text-cyan">What to do</p>
+        <p className="mt-1 text-lg leading-snug text-ink">{d.recommendedNextStep}</p>
+        <p className="mt-2 flex items-center gap-1 text-xs text-ink-3">
+          Why this step <BasisLine basis={d.basis} />
+        </p>
+      </div>
+      <div className="rounded-tile border border-line bg-panel px-4 py-4">
+        <p className="text-sm font-semibold text-ink-2">How to measure</p>
+        <ol className="mt-2 space-y-2">
+          {howToMeasure.map((s, i) => (
+            <li key={s} className="flex gap-3 text-md leading-snug text-ink">
+              <span className="num mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-line-strong text-xs text-ink-2">{i + 1}</span>
+              {s}
+            </li>
+          ))}
+        </ol>
       </div>
     </div>
   );
@@ -81,33 +86,31 @@ function MetricGuidanceBody({ id }: { id: GuidanceRef & { kind: "metric" } }) {
   const d = diagnostics[id.id];
   return (
     <>
-      <ThreeQuestions d={d} />
-      <Section title="Why this status">
-        <RuleTable rules={d.triggeredRules} />
-      </Section>
-      <Section title="What it measures">{g.whatItMeasures}</Section>
-      <Section title="Why it matters">{g.whyItMatters}</Section>
-      <Section title="Equipment required">{g.deviceRequired}</Section>
-      <Section title="How to measure it">
-        <ol className="space-y-1.5">
-          {g.howToMeasure.map((s, i) => (
-            <li key={s} className="flex gap-3">
-              <span className="num mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-badge border border-line-strong text-2xs text-ink-2">{i + 1}</span>
-              {s}
-            </li>
-          ))}
-        </ol>
-      </Section>
-      <Section title="What can affect the result in microgravity">{g.microgravityEffects}</Section>
-      <Section title="When to repeat the measurement">{g.whenToRepeat}</Section>
-      <Section title="What to record">
-        <ul className="list-disc space-y-0.5 pl-5 marker:text-ink-3">
-          {g.whatToRecord.map((s) => (
-            <li key={s}>{s}</li>
-          ))}
-        </ul>
-      </Section>
-      <Section title="What to do next">{g.nextStep}</Section>
+      <ThreeQuestions d={d} howToMeasure={g.howToMeasure} />
+      <details className="group mx-5 mt-3 rounded-tile border border-line">
+        <summary className="flex min-h-[48px] cursor-pointer list-none items-center justify-between px-4 text-md font-semibold text-ink">
+          More about this reading
+          <ChevronDown aria-hidden="true" className="h-5 w-5 text-ink-2 transition-transform duration-150 group-open:rotate-180" />
+        </summary>
+        <Section title="Why it might matter in space">{d.explanation}</Section>
+        {d.notes.length > 0 ? <Section title="Note">{d.notes.join(" ")}</Section> : null}
+        <Section title="Why this status">
+          <RuleTable rules={d.triggeredRules} />
+        </Section>
+        <Section title="What it measures">{g.whatItMeasures}</Section>
+        <Section title="Why it matters">{g.whyItMatters}</Section>
+        <Section title="Equipment">{g.deviceRequired}</Section>
+        <Section title="What can affect it in microgravity">{g.microgravityEffects}</Section>
+        <Section title="When to repeat">{g.whenToRepeat}</Section>
+        <Section title="What to record">
+          <ul className="list-disc space-y-0.5 pl-5 marker:text-ink-3">
+            {g.whatToRecord.map((s) => (
+              <li key={s}>{s}</li>
+            ))}
+          </ul>
+        </Section>
+        <Section title="Afterwards">{g.nextStep}</Section>
+      </details>
     </>
   );
 }
@@ -204,7 +207,7 @@ export function GuidanceDrawer() {
         status ? (
           <div className="mt-1.5 flex flex-wrap items-center gap-2">
             <StatusBadge status={status} />
-            <span className="text-sm text-ink-2">{guidance?.kind === "metric" ? "Metric guidance" : "Body-system guidance"}</span>
+            <span className="text-sm text-ink-2">{guidance?.kind === "metric" ? "Reading guide" : "Body system guide"}</span>
           </div>
         ) : null
       }
@@ -214,7 +217,7 @@ export function GuidanceDrawer() {
             {logMetric ? (
               <button type="button" className="btn btn-primary" onClick={() => openLog({ metricId: logMetric })}>
                 <Plus aria-hidden="true" className="h-4 w-4" />
-                Log measurement
+                Add reading
               </button>
             ) : null}
             {trendTab ? (

@@ -34,7 +34,7 @@ export function getCountermeasureTasks(aredTargetMinutes: number, hydrationTarge
     {
       id: "ared-session",
       systems: ["musculoskeletal", "cardiovascular"],
-      title: "ARED resistive exercise",
+      title: "Strength exercise (ARED)",
       description: "Complete only the assigned session in today's exercise plan.",
       category: "exercise",
       targetLabel: `Demo target ${aredTargetMinutes} min (mission plan configurable)`,

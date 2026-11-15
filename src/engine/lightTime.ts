@@ -71,3 +71,16 @@ export function earthMarsDistanceAu(date: Date): number {
 export function earthMarsLightMinutes(date: Date): number {
   return (earthMarsDistanceAu(date) * AU_KM) / C_KM_S / 60;
 }
+
+/**
+ * One-way radio time between the demo ship and Earth on a mission day, in
+ * minutes. The ship leaves Earth on day 1 and reaches Mars on the last day;
+ * it is placed at a growing share of the Earth–Mars distance on that date
+ * (eased, so it speeds up after launch and slows before arrival). An
+ * illustration of a transit, not a trajectory.
+ */
+export function shipEarthLightMinutes(missionDay: number, totalDays: number, at: Date): number {
+  const f = Math.min(1, Math.max(0, (missionDay - 1) / Math.max(1, totalDays - 1)));
+  const share = 0.5 - Math.cos(Math.PI * f) / 2;
+  return share * earthMarsLightMinutes(at);
+}

@@ -181,8 +181,8 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
   },
   aredMinutes: {
     metricId: "aredMinutes",
-    name: "ARED resistive exercise",
-    shortName: "ARED",
+    name: "Strength exercise (ARED)",
+    shortName: "Strength exercise",
     unit: "min",
     whatItMeasures:
       "Minutes of resistive exercise completed on the Advanced Resistive Exercise Device (ARED) today.",
@@ -208,7 +208,7 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
   radiation: {
     metricId: "radiation",
     name: "Cumulative radiation dose",
-    shortName: "Radiation",
+    shortName: "Radiation dose",
     unit: "mSv",
     whatItMeasures:
       "Your personal dosimeter's cumulative dose for the mission, and the change since the previous day.",
@@ -233,7 +233,7 @@ export const METRIC_GUIDANCE: Record<MetricId, MetricGuidance> = {
   pvt: {
     metricId: "pvt",
     name: "PVT reaction time",
-    shortName: "PVT",
+    shortName: "Reaction test",
     unit: "ms",
     whatItMeasures:
       "Mean reaction time on the Psychomotor Vigilance Test, a short task where you respond to a light or signal.",

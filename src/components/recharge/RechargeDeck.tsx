@@ -198,7 +198,7 @@ export function RechargeDeck() {
             ) : recharge === "game" ? (
               <OrbitCatch posesRef={posesRef} best={data.bestScore} onFinish={onGame} />
             ) : (
-              <BreatheRing posesRef={posesRef} handOn={handOn && status === "tracking"} onFinish={onBreathe} />
+              <BreatheRing posesRef={posesRef} handOn={handOn} handStatus={status} onFinish={onBreathe} />
             )}
             <HandPreview videoRef={videoRef} landmarksRef={landmarksRef} posesRef={posesRef} visible={handOn && !error} />
           </div>

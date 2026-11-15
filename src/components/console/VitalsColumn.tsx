@@ -80,8 +80,8 @@ export function VitalsColumn() {
 
   const sparks = useMemo(() => Object.fromEntries(PRIMARY_METRIC_IDS.map((m) => [m, sparkValues(days, m, day, 14)])) as Record<MetricId, (number | null)[]>, [days, day]);
   const tracks = useMemo(
-    () => Object.fromEntries([...PRIMARY_METRIC_IDS, "hydration" as const].map((m) => [m, gaugeTracks(m, settings.aredTargetMinutes, settings.hydrationTargetLiters)])) as Record<string, GaugeTrack[] | null>,
-    [settings.aredTargetMinutes, settings.hydrationTargetLiters],
+    () => Object.fromEntries([...PRIMARY_METRIC_IDS, "hydration" as const].map((m) => [m, gaugeTracks(m, settings.aredTargetMinutes, settings.hydrationTargetLiters, settings)])) as Record<string, GaugeTrack[] | null>,
+    [settings],
   );
   const extra = system.metrics.filter((m) => !(PRIMARY_METRIC_IDS as readonly MetricId[]).includes(m));
   const dailyDose = days[day - 1]?.dailyRadiationMsv;
@@ -104,7 +104,7 @@ export function VitalsColumn() {
     <section aria-labelledby="vitals-title" id="vitals" className="panel flex min-w-0 flex-col">
       <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
         <div className="flex items-center gap-1">
-          <h2 id="vitals-title" className="font-cond text-md font-bold uppercase tracking-label text-ink">
+          <h2 id="vitals-title" className="text-xl font-bold text-ink">
             Crew vitals
           </h2>
           <InfoTip label="Crew vitals">

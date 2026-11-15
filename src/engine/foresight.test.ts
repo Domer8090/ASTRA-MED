@@ -4,7 +4,7 @@ import { nextArrival, parseEnlil, sanitizeEnlilCache } from "../services/enlilFo
 import { sanitizeOnboarding } from "../hooks/useOnboarding";
 import type { ScenarioId } from "../types/health";
 import { evaluateAllMetrics } from "./diagnosticEngine";
-import { earthMarsDistanceAu, earthMarsLightMinutes } from "./lightTime";
+import { earthMarsDistanceAu, earthMarsLightMinutes, shipEarthLightMinutes } from "./lightTime";
 import { linearFit, trendWatch } from "./trendEngine";
 
 function at(scenario: ScenarioId, day: number) {
@@ -129,5 +129,14 @@ describe("flight-surgeon report", () => {
     expect(text).toMatch(/Rule: .*85/);
     expect(text).toMatch(/SYNTHETIC demo telemetry/);
     expect(text).toMatch(/not NASA flight rules/);
+  });
+});
+
+describe("ship-to-Earth signal delay", () => {
+  it("is near zero at launch and reaches the Earth–Mars light time on arrival", () => {
+    const at = new Date("2026-10-30T12:00:00Z");
+    expect(shipEarthLightMinutes(1, 180, at)).toBeLessThan(0.01);
+    expect(shipEarthLightMinutes(180, 180, at)).toBeCloseTo(earthMarsLightMinutes(at), 6);
+    expect(shipEarthLightMinutes(60, 180, at)).toBeLessThan(shipEarthLightMinutes(120, 180, at));
   });
 });

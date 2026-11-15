@@ -1,7 +1,7 @@
 import { useId, useMemo, useState } from "react";
 import { Copy, Download, Inbox, RadioTower, Trash2, TriangleAlert, WifiOff } from "lucide-react";
 import { LINK_UP_NOTE, NO_LINK_STEPS, ONBOARD_FIRST } from "../../data/medicalContact";
-import { earthMarsLightMinutes } from "../../engine/lightTime";
+import { missionSignalMinutes } from "../../utils/dates";
 import { buildMedicalMessage, type ContactPriority } from "../../engine/medicalContact";
 import { useMissionModel } from "../../hooks/useMissionModel";
 import { useToast } from "../../hooks/useToast";
@@ -41,7 +41,7 @@ function ContactBody({ initialPriority, initialReport }: { initialPriority: Cont
   const [priority, setPriority] = useState<ContactPriority>(initialPriority);
   const [report, setReport] = useState(initialReport);
   const [actionsTaken, setActionsTaken] = useState("");
-  const delay = earthMarsLightMinutes(new Date());
+  const delay = missionSignalMinutes(m.day);
 
   const text = useMemo(
     () =>

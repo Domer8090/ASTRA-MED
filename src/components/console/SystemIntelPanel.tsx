@@ -43,6 +43,8 @@ export function SystemIntelPanel() {
       ? diagnostics[selectedMetric]
       : (st.diagnostics.toSorted((a, b) => STATUS_RANK[b.status] - STATUS_RANK[a.status])[0] ?? diagnostics[def.metrics[0]!]);
   const focusName = METRIC_GUIDANCE[focus.metricId].name;
+  // Steps for the reading in focus, so heart rate and blood pressure no longer share one generic list.
+  const focusGuide = METRIC_GUIDANCE[focus.metricId];
   const sysTasks = tasks.filter((t) => t.systems.includes(selectedSystem));
   const sysFollowUps = followUps.filter((f) => f.systems.includes(selectedSystem));
   const frame = st.status === "CRITICAL" ? "border-critical/60" : st.status === "CAUTION" ? "border-caution/55" : "border-line";
@@ -52,7 +54,7 @@ export function SystemIntelPanel() {
       <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0">
           <p className="label">System status</p>
-          <h2 id="intel-title" className="flex items-center gap-1 font-cond text-lg font-bold leading-tight text-ink">
+          <h2 id="intel-title" className="flex items-center gap-1 text-2xl font-bold leading-tight text-ink">
             {def.name}
             <InfoTip label={def.name}>
               <p>{def.whyItMatters}</p>
@@ -105,7 +107,7 @@ export function SystemIntelPanel() {
 
       <div className="px-4 pt-3">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="flex items-center gap-1 label">
+          <h3 className="flex items-center gap-1 text-base font-semibold text-ink">
             {focusName}
             <InfoTip label="Why it matters in space">{focus.explanation}</InfoTip>
           </h3>
@@ -137,7 +139,7 @@ export function SystemIntelPanel() {
       </div>
 
       <div className="px-4 pt-4">
-        <h3 className="label">Observations</h3>
+        <h3 className="text-base font-semibold text-ink">Observations</h3>
         <ul className="mt-1.5 divide-y divide-line rounded-tile border border-line">
           {st.diagnostics.map((d) => (
             <li key={d.metricId}>
@@ -159,7 +161,7 @@ export function SystemIntelPanel() {
       </div>
 
       <div className="px-4 pt-4">
-        <h3 className="label">Tasks today</h3>
+        <h3 className="text-base font-semibold text-ink">Tasks today</h3>
         {sysFollowUps.length ? (
           <ul className="mt-1.5 space-y-1.5">
             {sysFollowUps.map((f) => (
@@ -205,11 +207,11 @@ export function SystemIntelPanel() {
 
       <details className="group mx-4 mt-4 rounded-tile border border-line" open={st.status !== "NOMINAL"}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
-          <span className="label">Self-check ({def.selfCheckSteps.length} steps)</span>
+          <span className="label">How to measure {METRIC_GUIDANCE[focus.metricId].shortName.toLowerCase()} ({focusGuide.howToMeasure.length} steps)</span>
           <ChevronDown aria-hidden="true" className="h-4 w-4 text-ink-3 transition-transform duration-200 group-open:rotate-180" />
         </summary>
         <ol className="space-y-1.5 border-t border-line px-3 py-2.5">
-          {def.selfCheckSteps.map((s, i) => (
+          {focusGuide.howToMeasure.map((s, i) => (
             <li key={s} className="flex gap-2.5 text-sm text-ink">
               <span className="num mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-badge border border-line-strong text-2xs text-ink-2">{i + 1}</span>
               {s}
@@ -217,7 +219,7 @@ export function SystemIntelPanel() {
           ))}
         </ol>
         <p className="border-t border-line px-3 py-2 text-xs text-ink-2">
-          Equipment: {def.deviceRequired} {def.caveat}
+          Equipment: {focusGuide.deviceRequired} {def.caveat}
         </p>
       </details>
 

@@ -261,7 +261,7 @@ export function buildHealthBrief(ctx: TuesdayContext): string {
   if (hazard) lines.push(`Environmental hazard ${hazard.level} (not a personal dose).`);
   lines.push(`Next action from the protocol engine: ${ctx.primaryAction}`);
   if (ctx.recentEnergy !== null) lines.push(`Latest self-reported energy: ${ctx.recentEnergy}/5.`);
-  lines.push(`One-way Earth–Mars signal delay today: ${ctx.lightMinutes.toFixed(1)} minutes.`);
+  lines.push(`One-way signal delay from the ship to Earth on this mission day: ${ctx.lightMinutes.toFixed(1)} minutes; a reply takes about ${(ctx.lightMinutes * 2).toFixed(0)} minutes.`);
   return lines.join("\n");
 }
 
@@ -287,6 +287,85 @@ export function buildModelMessages(brief: string, passages: readonly RetrievedPa
     ...history.slice(-8),
     { role: "user" as const, content: question },
   ];
+}
+
+/**
+ * Tuesday's spoken personality. The console does the work (logging, ticking
+ * tasks, reading the engines); the model only turns the result into speech,
+ * so every number still comes from the engines.
+ */
+export const TUESDAY_VOICE_PROMPT = `You are Tuesday, the voice of ASTRA-MED, the health companion on board a long Mars mission. Think of a sharp, warm co-pilot like FRIDAY or JARVIS: you talk like a person, not a menu. Quick, natural, a touch of dry wit when the moment allows, calm and serious when health is involved. You remember what was just said and answer follow-ups in context.
+
+How you speak:
+- Your words are read aloud. Reply in 1 to 3 short sentences, under 55 words. No lists, no markdown, no bracketed citations, no emoji.
+- Never open with "Sure", "Certainly", "Great question" or by repeating the question. Get to the point.
+- Small talk, jokes and questions about you are fine. Answer them like a friend would, briefly.
+- When greeted, greet back in a few words, mention anything not NOMINAL in one short clause, and ask how they are.
+- Never mention "the console", "console result", "the brief" or where you got a fact. Just say it, as if you did it yourself ("Logged it", "Done", "Your heart rate is...").
+- Don't ask about things nobody mentioned. At most one question back.
+
+Facts:
+- A [FOR THIS REPLY ...] note after the astronaut's words, when present, is what you just did or know for this request. It is true and it overrides anything older. Say it in your own words. Keep every number, unit and status word (NOMINAL, CAUTION, CRITICAL) exactly as written. If it says something was logged or marked done, confirm it. If it says something was NOT logged, say plainly that you didn't log it, why, and what to do.
+- Use only that note, the HEALTH BRIEF and the conversation for health facts and numbers. Never invent a reading, a number, a mission event or a crew name. If you don't know, say so.
+
+Safety:
+- Never diagnose. Never name or suggest medication or doses. Never tell the astronaut to stop, skip or change exercise or treatment.
+- For health concerns use plain phrases like "outside the configured demonstration range", "repeat the measurement", "review the mission-approved protocol", "contact the medical officer when communication is available".
+- Readings are synthetic demonstration data and thresholds are prototype values, not NASA flight rules. Space weather is an environmental hazard, not a personal dose.`;
+
+/** Messages for a spoken reply: persona, live health brief, recent conversation, then the console's result and the words heard. */
+export function buildVoiceMessages(
+  brief: string,
+  passages: readonly RetrievedPassage[],
+  history: readonly { role: "user" | "assistant"; content: string }[],
+  heard: string,
+  consoleResult?: string,
+) {
+  const library = passages.length ? `\n\nONBOARD LIBRARY\n${passages.map((p) => `${p.doc.title}: ${p.doc.text}`).join("\n")}` : "";
+  return [
+    { role: "system" as const, content: `${TUESDAY_VOICE_PROMPT}\n\nHEALTH BRIEF\n${brief}${library}` },
+    ...history.slice(-8),
+    // What the console just did rides along as a private note, never words to read out.
+    { role: "user" as const, content: consoleResult ? `${heard}\n\n[FOR THIS REPLY, a private note that is true: ${consoleResult}]` : heard },
+  ];
+}
+
+const NUMBER = /\d+(?:[.,]\d+)?/g;
+
+/**
+ * True when a spoken sentence carries a number that appears nowhere in what the
+ * model was given. Such a sentence is dropped: a model must never invent a reading.
+ * Small counts (0–10) are allowed, as in "one breathing round" or "in for 4".
+ */
+export function hasUnsupportedNumber(sentence: string, given: string): boolean {
+  const known = new Set((given.match(NUMBER) ?? []).map((n) => Number(n.replace(",", "."))));
+  return (sentence.match(NUMBER) ?? []).some((n) => {
+    const v = Number(n.replace(",", "."));
+    return !(Number.isInteger(v) && v <= 10) && !known.has(v);
+  });
+}
+
+/** Remove labels a small model sometimes echoes ("CONSOLE RESULT:", "Tuesday:") from a spoken sentence. */
+export function cleanSpoken(sentence: string): string {
+  return sentence
+    .replace(/\s?\[\d+\]/g, "")
+    .replace(/[*_#`]/g, "")
+    .replace(/^(?:\s*(?:console result|for this reply|tuesday|health brief)\s*:\s*|\s*assistant\b[:,]?\s*)+/i, "")
+    .trim();
+}
+
+/** Split streamed text into finished sentences and the unfinished rest. "36.9" is not a sentence end. */
+export function takeSentences(text: string): { done: string[]; rest: string } {
+  const done: string[] = [];
+  let start = 0;
+  const re = /[.!?]+["')\]]*(?=\s)|\n+/g;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    const end = m.index + m[0].length;
+    const s = text.slice(start, end).trim();
+    if (s) done.push(s);
+    start = end;
+  }
+  return { done, rest: text.slice(start) };
 }
 
 // ---------------------------------------------------------------- Offline replies
@@ -345,9 +424,15 @@ export function statusSummary(ctx: TuesdayContext): string {
   return parts.join(" ");
 }
 
+/** Retrieval score below which a passage is too loosely related to quote. */
+export const MIN_TIP_SCORE = 5;
+
 export function offlineReply(intent: TuesdayIntent, ctx: TuesdayContext, passages: readonly RetrievedPassage[]): OfflineReply {
   const actions = actionsFor(intent, ctx);
-  const tip = passages[0] ? `${passages[0].doc.text} [1]` : "";
+  // Quote the onboard library only when the best passage is a real match (weak keyword overlaps score below 5).
+  const tip = passages[0] && passages[0].score >= MIN_TIP_SCORE ? `${passages[0].doc.text} [1]` : "";
+  // Only quote the library on sleep when the passage is actually about sleep.
+  const sleepTip = passages[0] && /sleep|circadian|rest/i.test(passages[0].doc.text) ? tip : "";
   const texts: Record<TuesdayIntent, string> = {
     crisis: CRISIS_REPLY,
     urgent: URGENT_REPLY,
@@ -357,7 +442,9 @@ export function offlineReply(intent: TuesdayIntent, ctx: TuesdayContext, passage
     tired: `That sounds draining. ${ctx.diagnostics.sleep.latest && typeof ctx.diagnostics.sleep.latest.value === "number" ? `Your last logged sleep was ${ctx.diagnostics.sleep.latest.value} h. ` : ""}Keep the planned sleep period tonight, and avoid starting safety-critical work while very tired. A slow breathing round might help you reset now.`,
     low: "I hear you. Being this far from home is hard, and the signal delay makes it harder. Want to look at Earth together for a few minutes? If the feeling sticks around, talk to a crewmate or the behavioural-health contact.",
     stressed: "Okay. Let's slow things down for a minute. One breathing round: in for 4, out for 6. Then, if you want, tell me what's on your mind.",
-    sleep: tip || "Log your sleep the same way each day and keep the planned sleep period. If short sleep continues, note it for the medical officer.",
+    sleep:
+      sleepTip ||
+      `${ctx.diagnostics.sleep.latest && typeof ctx.diagnostics.sleep.latest.value === "number" ? `Your last logged sleep was ${ctx.diagnostics.sleep.latest.value} hours. ` : ""}Keep the planned sleep period, dim the lights and screens in the hour before it, and log your sleep the same way each day. If short sleep continues, note it for the medical officer.`,
     earth: "Opening the Earth view. The globe uses NASA imagery of Earth from yesterday, lit for the real time of day.",
     game: "Orbit Catch is ready: pinch or click the supply pods before they drift away. One minute, no pressure.",
     breathe: "One minute of paced breathing: in for 4 seconds, out for 6. Open your hand to breathe in and close it to breathe out, or just follow the ring.",
@@ -367,7 +454,7 @@ export function offlineReply(intent: TuesdayIntent, ctx: TuesdayContext, passage
     help: "I can explain your readings, track your mood and energy, spot when your pattern drifts from your own baseline, and help you recharge with an Earth view, a game or a breathing round. With a local model running I can also read a photo or a lab report on this device.",
     other: tip
       ? `Here's what the onboard guidance says: ${tip}`
-      : "I don't have guidance on that in my onboard library. If it's about your health, review the mission-approved protocol and contact the medical officer when communication is available.",
+      : "I don't have that in my onboard library. I can tell you how you're doing, log a reading, or explain any of your readings. If it's about your health, review the mission-approved protocol and contact the medical officer when communication is available.",
   };
   return { text: texts[intent], actions };
 }

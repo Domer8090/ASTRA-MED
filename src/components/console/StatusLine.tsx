@@ -7,9 +7,8 @@ import { useMissionModel } from "../../hooks/useMissionModel";
 import { useUiActions } from "../../hooks/useUi";
 import { useMissionStore } from "../../hooks/useMissionState";
 import type { HealthStatus } from "../../types/health";
-import { formatMetStamp, formatReadingStamp, formatRelative, padDay } from "../../utils/dates";
-import { capitalize, formatNumber } from "../../utils/formatting";
-import { earthMarsLightMinutes } from "../../engine/lightTime";
+import { formatMetStamp, formatReadingDate, formatRelative, formatSignalDelay, missionSignalMinutes, padDay } from "../../utils/dates";
+import { capitalize } from "../../utils/formatting";
 import { useCmeForecast } from "../../hooks/useCmeForecast";
 import { useNow } from "../../hooks/useNow";
 import { useTuesday } from "../../hooks/useTuesday";
@@ -71,17 +70,18 @@ function ScenarioContext() {
  * this astronaut, and what should happen next. Status, the body system to watch
  * and the single next action lead; counts and last check stay secondary.
  */
-/** One-way Earth–Mars radio delay on today's real date. */
-function SignalDelay() {
-  const now = useNow(60_000);
-  const minutes = earthMarsLightMinutes(now);
+/** One-way ship-to-Earth radio delay on the selected mission day. */
+function SignalDelay({ day }: { day: number }) {
+  const minutes = missionSignalMinutes(day);
+  const shown = formatSignalDelay(minutes);
+  const reply = formatSignalDelay(minutes * 2);
   return (
     <span className="flex items-center gap-1.5">
       <RadioTower aria-hidden="true" className="h-3.5 w-3.5" />
       <span className="label">Signal delay</span>
-      <span className="num text-ink">{formatNumber(minutes, 1)} min</span>
+      <span className="num text-ink">{shown.value} {shown.unit}</span>
       <InfoTip label="Signal delay">
-        One-way radio time between Earth and Mars on today&apos;s real date (NASA JPL approximate positions). A question to the ground and its answer take at least twice this.
+        One-way radio time between the ship and Earth on mission day {day}: near zero at launch, growing until the ship reaches Mars (NASA JPL approximate planet positions). A reply takes at least twice this, about {reply.value} {reply.unit}.
       </InfoTip>
     </span>
   );
@@ -225,7 +225,7 @@ export function StatusLine() {
             {lastReading ? (
               <>
                 <span className="num text-ink" title={`MET ${formatMetStamp(lastReading.recordedAt)}, ship time UTC`}>
-                  {formatReadingStamp(lastReading.missionDay, lastReading.recordedAt)}
+                  {formatReadingDate(lastReading.missionDay, lastReading.recordedAt)}
                 </span>
                 <ProvenanceTag kind={provenanceForSource(lastReading.source)} />
               </>
@@ -234,7 +234,7 @@ export function StatusLine() {
             )}
           </span>
           <MarsCmeNotice />
-          <SignalDelay />
+          <SignalDelay day={day} />
           <button
             type="button"
             className={`btn ml-auto min-h-[32px] px-2 text-xs ${overall.status === "CRITICAL" ? "btn-danger" : "btn-ghost"}`}

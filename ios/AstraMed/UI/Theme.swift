@@ -9,7 +9,7 @@ enum Palette {
     static let lineStrong = Color(hex: 0x2A4A68)
     static let ink = Color(hex: 0xE8F0FA)
     static let ink2 = Color(hex: 0x91A4BA)
-    static let ink3 = Color(hex: 0x647A93)
+    static let ink3 = Color(hex: 0x7D93AB)
     static let cyan = Color(hex: 0x42D9F5)
     static let nominal = Color(hex: 0x22C55E)
     static let caution = Color(hex: 0xF59E0B)

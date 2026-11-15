@@ -40,7 +40,7 @@ export const SPACEFLIGHT_HAZARDS: readonly SpaceflightHazard[] = [
     name: "Distance from Earth",
     summary: "Instructions, supplies and medical care become harder to receive as crews travel deeper into space.",
     systems: ["cardiovascular", "musculoskeletal", "neuroOcular", "immuneRadiation", "metabolicCircadian"],
-    inApp: "Works fully offline, shows today's Earth–Mars signal delay, and gives on-board guidance and a report for the flight surgeon.",
+    inApp: "Works fully offline, shows the ship-to-Earth signal delay for the mission day, and gives on-board guidance and a report for the flight surgeon.",
   },
   {
     id: "gravity",

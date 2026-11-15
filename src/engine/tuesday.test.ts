@@ -109,8 +109,10 @@ describe("local model", () => {
     expect(isLocalEndpoint("file:///etc")).toBe(false);
   });
 
-  it("prefers Qwen3 for chat and MedGemma for images", () => {
-    expect(chooseModels(["llama3.1:8b", "qwen3:8b", "medgemma1.5:4b"])).toEqual({ chat: "qwen3:8b", medical: "medgemma1.5:4b" });
+  it("prefers a model without a thinking pass for chat and MedGemma for images", () => {
+    expect(chooseModels(["llama3.1:8b", "qwen3:8b", "medgemma1.5:4b"])).toEqual({ chat: "llama3.1:8b", medical: "medgemma1.5:4b" });
+    expect(chooseModels(["qwen3:4b", "llama3.2:3b"])).toEqual({ chat: "llama3.2:3b", medical: null });
+    expect(chooseModels(["qwen3:4b"])).toEqual({ chat: "qwen3:4b", medical: null });
     expect(chooseModels(["nomic-embed-text", "llama3.1:8b"])).toEqual({ chat: "llama3.1:8b", medical: null });
     expect(chooseModels(["a", "b"], { chat: "b" }).chat).toBe("b");
   });
@@ -161,10 +163,22 @@ describe("hand pose", () => {
     expect(readHandPose([])).toBeNull();
   });
 
-  it("mirrors the cursor", () => {
+  it("mirrors the cursor, between thumb and index tips", () => {
     const lm = hand(0.35, 0.2);
     lm[8] = { x: 0.2, y: 0.3 };
+    lm[4] = { x: 0.2, y: 0.3 };
     expect(readHandPose(lm)!.cursor).toEqual({ x: 0.8, y: 0.3 });
+  });
+
+  it("measures how open the hand is", () => {
+    expect(readHandPose(hand(0.35, 0.2))!.openness).toBeGreaterThan(0.85);
+    expect(readHandPose(hand(0.05, 0.2))!.openness).toBe(0);
+  });
+
+  it("depth counts: a finger pointing at the camera is still extended", () => {
+    const lm = hand(0.05, 0.2);
+    for (const t of [8, 12, 16, 20]) lm[t] = { ...lm[t]!, z: -0.35 };
+    expect(readHandPose(lm)!.extended).toBe(4);
   });
 });
 
@@ -262,7 +276,7 @@ describe("medical officer message and hazard map", () => {
 
 describe("two hands and the ground loop", () => {
   it("measures the spread between two hand cursors and draws a 21-point skeleton", () => {
-    const pose = (x: number, y: number) => ({ cursor: { x, y }, pinch: true, extended: 4, open: false, fist: false, palmSize: 0.2 });
+    const pose = (x: number, y: number) => ({ cursor: { x, y }, pinch: true, extended: 4, open: false, fist: false, openness: 1, palmSize: 0.2 });
     expect(handSpread(pose(0.2, 0.5), pose(0.5, 0.9))).toBeCloseTo(0.5);
     const points = new Set(HAND_CONNECTIONS.flat());
     expect(points.size).toBe(21);

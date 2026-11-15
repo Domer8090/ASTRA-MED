@@ -42,6 +42,11 @@ import { metricBasis } from "./basis";
 export interface EngineSettings {
   aredTargetMinutes: number;
   hydrationTargetLiters: number;
+  /** Cumulative mission dose limit (mSv). Defaults to `RADIATION.limit.default`. */
+  radiationLimitMsv?: number;
+  /** PVT in-range band (ms). Defaults to `PVT.range`. */
+  pvtMinMs?: number;
+  pvtMaxMs?: number;
 }
 
 export interface EngineInput {
@@ -439,15 +444,27 @@ function evalRadiation(input: EngineInput, day: number, r: MetricReading): Value
   const why =
     "Outside Earth's magnetosphere, galactic cosmic rays deliver a steady dose and solar particle events can add more. Only the dosimeter gives your personal dose.";
   const obs = `${formatDose(daily)} today, ${formatDose(cumulative, 1)} cumulative`;
-  const budget = RADIATION.missionExposureBudgetMsv;
-  if (budget !== null && cumulative >= budget) {
+  const limit = input.settings.radiationLimitMsv ?? RADIATION.limit.default;
+  const cautionAt = Math.round(limit * RADIATION.cautionFraction);
+  const next = "Follow the approved mission exposure protocol and contact the medical officer when communication is available.";
+  if (cumulative >= limit) {
     return {
       status: "CRITICAL",
-      rules: [rule("rad-budget", "CRITICAL", "At or above the configured mission exposure budget", formatDose(cumulative, 1), `≥ ${budget} mSv`, RADIATION.ruleProvenance)],
+      rules: [rule("rad-limit", "CRITICAL", "At or above the mission dose limit", formatDose(cumulative, 1), `≥ ${limit} mSv`, RADIATION.limitProvenance)],
       notes: [],
-      summary: `Cumulative dose has reached the configured mission exposure budget.`,
+      summary: `Cumulative dose ${formatDose(cumulative, 1)} has reached the configured mission limit of ${limit} mSv.`,
       explanation: why,
-      next: "Follow the approved mission exposure protocol and contact the medical officer when communication is available.",
+      next,
+    };
+  }
+  if (cumulative >= cautionAt) {
+    return {
+      status: "CAUTION",
+      rules: [rule("rad-near-limit", "CAUTION", "Near the mission dose limit", formatDose(cumulative, 1), `≥ ${cautionAt} mSv (${Math.round(RADIATION.cautionFraction * 100)}% of ${limit} mSv)`, RADIATION.limitProvenance)],
+      notes: [],
+      summary: `Cumulative dose ${formatDose(cumulative, 1)} is above ${Math.round(RADIATION.cautionFraction * 100)}% of the configured mission limit.`,
+      explanation: why,
+      next,
     };
   }
   if (med !== null && prior.length >= 3 && daily > med * RADIATION.unusualDailyFactor) {
@@ -464,7 +481,7 @@ function evalRadiation(input: EngineInput, day: number, r: MetricReading): Value
     `Dosimeter shows ${obs}, within the usual daily range.`,
     why,
     "Review the dosimeter and the space-weather monitor once per day.",
-    budget === null ? ["No mission exposure budget is configured, so no cumulative critical limit applies."] : [],
+    [`Mission dose limit: ${limit} mSv (adjustable in Thresholds).`],
   );
 }
 
@@ -482,6 +499,21 @@ function evalPvt(input: EngineInput, day: number, r: MetricReading): ValueEval {
   const base = pvtBaseline(input.days);
   const obs = `${v} ms`;
   const why = "Slower reaction time can reveal fatigue from sleep loss or workload before you notice it.";
+  const lo = input.settings.pvtMinMs ?? PVT.range.min;
+  const hi = input.settings.pvtMaxMs ?? PVT.range.max;
+  if (v > hi || v < lo) {
+    const slow = v > hi;
+    return {
+      status: "CAUTION",
+      rules: [rule(slow ? "pvt-above-range" : "pvt-below-range", "CAUTION", slow ? "Slower than the configured range" : "Faster than the configured range", obs, `${lo}–${hi} ms`, PVT.provenance)],
+      notes: [],
+      summary: `PVT mean reaction time ${obs} is outside the configured demonstration range of ${lo}–${hi} ms.`,
+      explanation: why,
+      next: slow
+        ? "Repeat the measurement. Review recent sleep and workload, take extra care with safety-critical tasks and contact the medical officer when communication is available."
+        : "Repeat the measurement and wait for each stimulus before responding.",
+    };
+  }
   if (base === null || day <= PVT.baselineDays) {
     return nominal(`PVT mean reaction time is ${obs}. Baseline is being established (days 1–${PVT.baselineDays}).`, why, "Complete each scheduled PVT session.");
   }

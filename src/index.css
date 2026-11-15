@@ -40,7 +40,7 @@
   --c-cyan: #42d9f5;
   --c-tue: #b9a6ff;
   --c-tue-deep: #7461d8;
-  --c-ink-3: #647a93;
+  --c-ink-3: #7d93ab;
   --c-ink: #e8f0fa;
   --c-ink-2: #91a4ba;
   --c-blue: #4c8dff;
@@ -48,13 +48,13 @@
 
   --rail-w: 76px;
   --topbar-h: 56px;
-  --sticky-offset: 104px;
+  --sticky-offset: 160px;
   color-scheme: dark;
 }
 
 @media (min-width: 768px) {
   :root {
-    --sticky-offset: 108px;
+    --sticky-offset: 148px;
   }
 }
 
@@ -108,6 +108,77 @@
 }
 
 @layer components {
+  /* Range slider: thin track filled up to --pct, round thumb. 44px tall hit area. */
+  .range {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 44px;
+    background: transparent;
+    cursor: pointer;
+  }
+  .range::-webkit-slider-runnable-track {
+    height: 6px;
+    border-radius: 999px;
+    background: linear-gradient(to right, theme("colors.cyan.DEFAULT") 0 var(--pct, 0%), theme("colors.line.strong") var(--pct, 0%) 100%);
+  }
+  .range::-moz-range-track {
+    height: 6px;
+    border-radius: 999px;
+    background: theme("colors.line.strong");
+  }
+  .range::-moz-range-progress {
+    height: 6px;
+    border-radius: 999px;
+    background: theme("colors.cyan.DEFAULT");
+  }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 22px;
+    height: 22px;
+    margin-top: -8px;
+    border-radius: 999px;
+    background: theme("colors.ink.DEFAULT");
+    border: 4px solid theme("colors.cyan.DEFAULT");
+  }
+  .range::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 999px;
+    background: theme("colors.ink.DEFAULT");
+    border: 4px solid theme("colors.cyan.DEFAULT");
+  }
+  .range:focus-visible {
+    outline: none;
+  }
+  .range:focus-visible::-webkit-slider-thumb {
+    box-shadow: 0 0 0 3px theme("colors.space"), 0 0 0 5px theme("colors.cyan.DEFAULT");
+  }
+  .range:focus-visible::-moz-range-thumb {
+    box-shadow: 0 0 0 3px theme("colors.space"), 0 0 0 5px theme("colors.cyan.DEFAULT");
+  }
+  /* Two thumbs on one track: the inputs are stacked, only their thumbs take the pointer. */
+  .range-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .range-overlay::-webkit-slider-runnable-track {
+    background: transparent;
+  }
+  .range-overlay::-moz-range-track {
+    background: transparent;
+  }
+  .range-overlay::-moz-range-progress {
+    background: transparent;
+  }
+  .range-overlay::-webkit-slider-thumb {
+    pointer-events: auto;
+  }
+  .range-overlay::-moz-range-thumb {
+    pointer-events: auto;
+  }
   .num {
     font-family: theme("fontFamily.mono");
     font-variant-numeric: tabular-nums slashed-zero;

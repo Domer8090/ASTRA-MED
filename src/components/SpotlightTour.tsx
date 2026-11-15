@@ -99,8 +99,7 @@ function cardStyle(hole: Rect | null): React.CSSProperties {
   return { left: gap, bottom: gap, width: CARD_W };
 }
 
-function Tour({ onEnd }: { onEnd: () => void }) {
-  const [steps] = useState(visibleSteps);
+function Tour({ steps, onEnd }: { steps: readonly TourStep[]; onEnd: () => void }) {
   const [index, setIndex] = useState(0);
   const [hole, setHole] = useState<Rect | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -217,9 +216,35 @@ function Tour({ onEnd }: { onEnd: () => void }) {
   );
 }
 
-/** Spotlight walkthrough of the console. Mounted only while the tour runs. */
+/**
+ * Spotlight walkthrough of the console. Mounted only while the tour runs.
+ * Starting the tour switches to Summary first; the steps are read once that view
+ * has rendered. If no target is visible at all, the tour ends instead of staying
+ * active with nothing on screen (which used to block starting it again).
+ */
 export function SpotlightTour() {
   const { tourActive, endTour } = useOnboarding();
   if (!tourActive) return null;
-  return <Tour onEnd={endTour} />;
+  return <TourLoader onEnd={endTour} />;
+}
+
+function TourLoader({ onEnd }: { onEnd: () => void }) {
+  const [steps, setSteps] = useState<TourStep[] | null>(null);
+  useEffect(() => {
+    let tries = 0;
+    let timer = 0;
+    const look = () => {
+      const found = visibleSteps();
+      if (found.length || tries >= 10) {
+        if (found.length) setSteps(found);
+        else onEnd();
+        return;
+      }
+      tries += 1;
+      timer = window.setTimeout(look, 80);
+    };
+    timer = window.setTimeout(look, 60);
+    return () => window.clearTimeout(timer);
+  }, [onEnd]);
+  return steps ? <Tour steps={steps} onEnd={onEnd} /> : null;
 }

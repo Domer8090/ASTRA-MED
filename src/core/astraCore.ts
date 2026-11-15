@@ -26,7 +26,7 @@ import { baselineDrift } from "../engine/baselineEngine";
 import { evaluateBodySystems } from "../engine/bodySystemEngine";
 import { aggregateStatus, evaluateAllMetrics, evaluateMissionDays, type EngineInput } from "../engine/diagnosticEngine";
 import { hazardMap } from "../engine/hazardMap";
-import { earthMarsLightMinutes } from "../engine/lightTime";
+import { missionSignalMinutes } from "../utils/dates";
 import { buildMedicalMessage, type ContactPriority } from "../engine/medicalContact";
 import { buildFollowUps, mostImportantAction } from "../engine/protocolEngine";
 import { computeReadiness, tasksForDay, type ReadinessInput } from "../engine/readinessEngine";
@@ -131,9 +131,9 @@ export function createAstraCore(backend: StorageLike = memoryStorage(), options:
   /** Everything the engines derive for the selected day, same wiring as the web console. */
   function model() {
     const { settings, measurements, completions, followUps: followUpLog } = mission.getState();
-    const { scenarioId, selectedDay: day, aredTargetMinutes, hydrationTargetLiters } = settings;
+    const { scenarioId, selectedDay: day, aredTargetMinutes, hydrationTargetLiters, radiationLimitMsv, pvtMinMs, pvtMaxMs } = settings;
     const days = buildEffectiveDays(scenarioId, measurements);
-    const engineInput: EngineInput = { days, settings: { aredTargetMinutes, hydrationTargetLiters }, evaluatedAt: now().toISOString() };
+    const engineInput: EngineInput = { days, settings: { aredTargetMinutes, hydrationTargetLiters, radiationLimitMsv, pvtMinMs, pvtMaxMs }, evaluatedAt: now().toISOString() };
     const missionDays = evaluateMissionDays(engineInput);
     const diagnostics = evaluateAllMetrics(engineInput, day);
     const advisories = [...scenarioAdvisories(scenarioId, day), ...donkiAdvisories(archived, now().getTime())];
@@ -171,7 +171,7 @@ export function createAstraCore(backend: StorageLike = memoryStorage(), options:
       trends: m.trends,
       drift: m.drift,
       primaryAction: m.primaryAction.text,
-      lightMinutes: earthMarsLightMinutes(now()),
+      lightMinutes: missionSignalMinutes(m.day),
       recentEnergy,
     };
   }
@@ -179,7 +179,7 @@ export function createAstraCore(backend: StorageLike = memoryStorage(), options:
   function snapshot(args: { linkUp?: boolean } = {}) {
     const m = model();
     const linkUp = args.linkUp ?? false;
-    const delay = earthMarsLightMinutes(now());
+    const delay = missionSignalMinutes(m.day);
     const scenario = SCENARIOS[m.settings.scenarioId];
     const td = tuesday.getState();
     const wellbeing = wellbeingSummary(td.activity, m.day);
@@ -401,7 +401,7 @@ export function createAstraCore(backend: StorageLike = memoryStorage(), options:
       readiness: m.readiness,
       days: m.days,
       generatedAt: now().toISOString().slice(0, 16).replace("T", " "),
-      signalDelayMinutes: earthMarsLightMinutes(now()),
+      signalDelayMinutes: missionSignalMinutes(m.day),
       drift: m.drift,
     });
   }
@@ -420,7 +420,7 @@ export function createAstraCore(backend: StorageLike = memoryStorage(), options:
       report: args.report.slice(0, 1200),
       actionsTaken: args.actionsTaken.slice(0, 800),
       linkUp: args.linkUp,
-      signalDelayMinutes: earthMarsLightMinutes(now()),
+      signalDelayMinutes: missionSignalMinutes(m.day),
     });
   }
 

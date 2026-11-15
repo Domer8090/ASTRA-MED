@@ -48,7 +48,7 @@ export const REFERENCE_SOURCES: SourceEntry[] = [
     publisher: "Canadian Space Agency (CSA)",
     description:
       "Moon and Mars missions bring more weightlessness, radiation, isolation and communication delay, and less ability to rely on Earth; ISS research characterises these risks and countermeasures.",
-    usedFor: "Framing for on-board self-assessment and the Earth–Mars signal delay (Overview).",
+    usedFor: "Framing for on-board self-assessment and the ship-to-Earth signal delay (Overview).",
   },
   {
     title: "DONKI WSA-ENLIL Simulations",
@@ -63,7 +63,7 @@ export const REFERENCE_SOURCES: SourceEntry[] = [
     url: "https://ssd.jpl.nasa.gov/planets/approx_pos.html",
     publisher: "NASA JPL Solar System Dynamics (E. M. Standish)",
     description: "Keplerian elements and rates for approximate planet positions, valid 1800–2050.",
-    usedFor: "Earth–Mars distance and one-way signal delay on today's date, computed in the browser.",
+    usedFor: "Earth–Mars distance on each mission date, computed in the browser. The ship's signal delay is a growing share of it, from launch to arrival at Mars.",
   },
   {
     title: "Spaceflight Standard Measures",

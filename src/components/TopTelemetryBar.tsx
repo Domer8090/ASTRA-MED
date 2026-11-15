@@ -1,202 +1,209 @@
-import { ChevronLeft, ChevronRight, CloudOff, Globe, Satellite, Wifi, WifiOff } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { BookOpen, ChevronLeft, ChevronRight, Clock3, CloudSun, Ellipsis, GanttChart, RefreshCw, Stethoscope, Wifi, WifiOff } from "lucide-react";
 import { MISSION } from "../config/thresholds";
+import { STATUS_TEXT_CLASS } from "../config/theme";
 import { useMissionModel } from "../hooks/useMissionModel";
 import { useMissionStore } from "../hooks/useMissionState";
 import { useNow } from "../hooks/useNow";
 import { useSpaceWeather } from "../hooks/useSpaceWeather";
 import { useUiActions } from "../hooks/useUi";
-import { useTuesday } from "../hooks/useTuesday";
-import { formatLocalDate, formatLocalTime, formatMet, padDay } from "../utils/dates";
+import { MEDICAL_OFFICER_HASH } from "../hooks/useView";
+import { formatMet, formatMetLong, formatMissionDate } from "../utils/dates";
 import { BrandMark } from "./BrandMark";
-import { ReadinessIndicator } from "./ReadinessIndicator";
+import { scrollToSection } from "./navigation";
 import { ScenarioSelector } from "./ScenarioSelector";
 import { StatusIcon } from "./shared/StatusBadge";
-import { STATUS_TEXT_CLASS } from "../config/theme";
-import { TuesdayMark } from "./tuesday/TuesdayMark";
-import type { SpaceWeatherMode } from "../types/health";
-
-function Cell({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
-  return (
-    <div className={`flex min-w-0 flex-col justify-center border-l border-line px-3 first:border-l-0 ${className}`}>
-      <span className="label">{label}</span>
-      <div className="mt-0.5 min-w-0">{children}</div>
-    </div>
-  );
-}
-
-function MetClock({ day }: { day: number }) {
-  const now = useNow(1000);
-  return (
-    <span className="num text-md font-medium text-ink" aria-label={`Mission elapsed time ${formatMet(day, now)}`}>
-      {formatMet(day, now)}
-    </span>
-  );
-}
-
-function LocalClock() {
-  const now = useNow(1000);
-  return (
-    <span className="flex flex-col leading-tight">
-      <span className="num text-md font-medium text-ink">{formatLocalTime(now)}</span>
-      <span className="text-2xs text-ink-3">{formatLocalDate(now)}</span>
-    </span>
-  );
-}
-
-const WX_STYLE: Record<SpaceWeatherMode, string> = {
-  LIVE: "text-nominal",
-  PARTIAL: "text-caution",
-  CACHED: "text-[#8cb4ff]",
-  ARCHIVED: "text-ink-2",
-  UNAVAILABLE: "text-[#ff8aa0]",
-};
-
-/** Persistent reminder that health readings, adherence history, XP and targets are demo data. */
-function DemoDataChip({ onOpen }: { onOpen: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className="chip-tag whitespace-nowrap border-line-strong bg-raised text-ink hover:border-cyan"
-      title="Health telemetry, adherence history, XP, streaks and countermeasure targets are synthetic demo data. NASA DONKI space weather is real. Select for the Overview."
-    >
-      DEMO DATA
-      <span className="sr-only">: synthetic health telemetry and adherence history. Open the Overview.</span>
-    </button>
-  );
-}
 
 export function DayStepper() {
   const store = useMissionStore();
   const { day } = useMissionModel();
   return (
-    <div className="flex items-center gap-1">
-      <button type="button" className="btn btn-ghost min-h-[32px] min-w-[32px] px-1" aria-label="Previous mission day" disabled={day <= 1} onClick={() => store.setSelectedDay(day - 1)}>
+    <div className="flex items-center gap-0.5">
+      <button type="button" className="btn btn-ghost min-h-[40px] min-w-[40px] px-1" aria-label="Previous mission day" disabled={day <= 1} onClick={() => store.setSelectedDay(day - 1)}>
         <ChevronLeft aria-hidden="true" className="h-4 w-4" />
       </button>
-      <span className="num whitespace-nowrap text-md font-semibold text-ink" aria-live="polite">
-        <span className="sr-only">Mission day </span>
-        {padDay(day)}
-        <span className="text-ink-3"> / {MISSION.totalDays}</span>
+      <span className="whitespace-nowrap text-sm text-ink-2" aria-live="polite">
+        Day <span className="num text-md font-semibold text-ink">{day}</span>
+        <span className="hidden min-[420px]:inline"> of {MISSION.totalDays}</span>
       </span>
-      <button type="button" className="btn btn-ghost min-h-[32px] min-w-[32px] px-1" aria-label="Next mission day" disabled={day >= MISSION.totalDays} onClick={() => store.setSelectedDay(day + 1)}>
+      <button type="button" className="btn btn-ghost min-h-[40px] min-w-[40px] px-1" aria-label="Next mission day" disabled={day >= MISSION.totalDays} onClick={() => store.setSelectedDay(day + 1)}>
         <ChevronRight aria-hidden="true" className="h-4 w-4" />
       </button>
     </div>
   );
 }
 
-export function TopTelemetryBar() {
-  const { day, overall } = useMissionModel();
-  const { mode, online, types } = useSpaceWeather();
-  const liveHosts = new Set(Object.values(types).filter((t) => t.source === "live").map((t) => t.host));
-  const shownSources = new Set(Object.values(types).map((t) => t.source));
-  const wxSource =
-    mode === "UNAVAILABLE"
-      ? `showing ${[...shownSources].join(" + ")}`
-      : mode === "ARCHIVED"
-        ? "May 2024 archive"
-        : mode === "CACHED"
-          ? "saved earlier"
-          : liveHosts.size > 1
-            ? "mixed NASA hosts"
-            : liveHosts.has("ccmc.gsfc.nasa.gov")
-              ? "via CCMC DONKI API"
-              : "via api.nasa.gov";
+function ShipClock({ day }: { day: number }) {
+  const now = useNow(1000);
+  return <span className="num text-ink">{formatMet(day, now)}</span>;
+}
+
+/**
+ * Always-visible mission clock: launch date, the selected mission day's date,
+ * live mission elapsed time, and progress with days remaining. The mission
+ * calendar is the synthetic demo mission's (day 1 = MISSION.epochUtc).
+ */
+function MissionClockStrip() {
+  const { day } = useMissionModel();
+  const now = useNow(1000);
+  const pct = Math.round((day / MISSION.totalDays) * 100);
+  const left = MISSION.totalDays - day;
+  const item = "flex items-baseline gap-1.5 whitespace-nowrap";
+  const label = "text-xs text-ink-3";
+  const value = "text-sm font-semibold text-ink";
+  return (
+    <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-line-soft px-3 py-1.5 md:px-4" aria-label="Mission timeline">
+      <span className={`${item} max-md:hidden`}>
+        <span className={label}>Launch</span>
+        <span className={value}>{formatMissionDate(1)}</span>
+      </span>
+      <span className={item}>
+        <span className={label}>Mission date</span>
+        <span className={value}>{formatMissionDate(day)}</span>
+      </span>
+      <span className={item}>
+        <span className={label}>Elapsed (MET)</span>
+        <span className={`num ${value}`}>{formatMetLong(day, now)}</span>
+      </span>
+      <span className="flex min-w-[180px] flex-1 items-center gap-2">
+        <span
+          className="relative h-2 flex-1 overflow-hidden rounded-full bg-line-soft"
+          role="progressbar"
+          aria-label="Mission progress"
+          aria-valuemin={0}
+          aria-valuemax={MISSION.totalDays}
+          aria-valuenow={day}
+          aria-valuetext={`Day ${day} of ${MISSION.totalDays}, ${left} days to go`}
+        >
+          <span className="absolute inset-y-0 left-0 rounded-full bg-cyan" style={{ width: `${pct}%` }} />
+        </span>
+        <span className="whitespace-nowrap text-sm text-ink-2">
+          <span className="font-semibold text-ink">{pct}%</span> · {left} days to go<span className="max-md:hidden"> · ends {formatMissionDate(MISSION.totalDays)}</span>
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/** Secondary controls and readouts, one click away. */
+function MoreMenu({ timelineOpen, onToggleTimeline }: { timelineOpen: boolean; onToggleTimeline: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const { day } = useMissionModel();
+  const { online, mode } = useSpaceWeather();
   const { openSources } = useUiActions();
-  const tuesday = useTuesday();
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const go = (fn: () => void) => () => {
+    setOpen(false);
+    fn();
+  };
+  const item = "flex min-h-[44px] w-full items-center gap-2.5 rounded-control px-2.5 text-left text-sm text-ink hover:bg-raised";
 
   return (
-    <header className="sticky top-0 z-30 border-b border-line bg-space">
-      <div className="flex h-[var(--topbar-h)] items-stretch">
-        <div className="flex items-center gap-2 px-3 lg:hidden">
+    <div ref={ref} className="relative">
+      <button type="button" className="btn btn-ghost min-h-[40px] gap-1.5 px-2.5" aria-expanded={open} aria-haspopup="true" onClick={() => setOpen((o) => !o)}>
+        <Ellipsis aria-hidden="true" className="h-5 w-5" />
+        <span className="hidden sm:inline">More</span>
+      </button>
+      {open ? (
+        <div className="t-fade-in absolute right-0 top-full z-50 mt-2 w-[min(320px,calc(100vw-24px))] rounded-panel border border-line-strong bg-panel p-2">
+          <div className="border-b border-line px-2.5 pb-2.5 pt-1">
+            <ScenarioSelector />
+          </div>
+          <button type="button" className={item} aria-pressed={timelineOpen} onClick={go(onToggleTimeline)}>
+            <GanttChart aria-hidden="true" className="h-4 w-4 text-ink-2" />
+            {timelineOpen ? "Hide mission timeline" : "Show mission timeline"}
+          </button>
+          <button type="button" className={item} onClick={go(() => scrollToSection("sync"))}>
+            <RefreshCw aria-hidden="true" className="h-4 w-4 text-ink-2" />
+            Connect devices
+          </button>
+          <button type="button" className={item} onClick={go(() => scrollToSection("weather"))}>
+            <CloudSun aria-hidden="true" className="h-4 w-4 text-ink-2" />
+            Space weather <span className="ml-auto font-mono text-2xs text-ink-2">{mode}</span>
+          </button>
+          <a className={item} href={MEDICAL_OFFICER_HASH} onClick={() => setOpen(false)}>
+            <Stethoscope aria-hidden="true" className="h-4 w-4 text-ink-2" />
+            Medical officer view
+          </a>
+          <button type="button" className={item} onClick={go(() => openSources("about"))}>
+            <BookOpen aria-hidden="true" className="h-4 w-4 text-ink-2" />
+            About this demo and data sources
+          </button>
+          <dl className="mt-1 grid grid-cols-2 gap-2 border-t border-line px-2.5 pt-2.5 text-2xs">
+            <div>
+              <dt className="flex items-center gap-1 text-ink-3">
+                <Clock3 aria-hidden="true" className="h-3 w-3" />
+                Ship clock (UTC)
+              </dt>
+              <dd className="mt-0.5 text-xs">
+                <ShipClock day={day} />
+              </dd>
+            </div>
+            <div>
+              <dt className="text-ink-3">Network</dt>
+              <dd className={`mt-0.5 flex items-center gap-1 text-xs ${online ? "text-ink" : "text-caution"}`}>
+                {online ? <Wifi aria-hidden="true" className="h-3.5 w-3.5" /> : <WifiOff aria-hidden="true" className="h-3.5 w-3.5" />}
+                {online ? "Online" : "Offline"}
+              </dd>
+            </div>
+          </dl>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * Slim top bar: brand, day, overall status (word and icon), the SYNTHETIC data
+ * label and a More menu for everything else.
+ */
+export function TopTelemetryBar({ timelineOpen, onToggleTimeline }: { timelineOpen: boolean; onToggleTimeline: () => void }) {
+  const { overall } = useMissionModel();
+  const { openSources } = useUiActions();
+
+  return (
+    <header className="border-b border-line bg-space">
+      <div className="flex h-[var(--topbar-h)] items-center gap-2 px-2 md:gap-3 md:px-4">
+        <div className="flex items-center gap-2 lg:hidden">
           <BrandMark className="h-7 w-7" />
-          <span className="hidden whitespace-nowrap font-cond text-md font-bold tracking-label min-[400px]:inline">ASTRA-MED</span>
         </div>
-        <Cell label="Mission" className="hidden md:flex">
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="block min-w-0 truncate font-cond text-md font-semibold text-ink" title={`${MISSION.name}. Crew ${MISSION.crewLabel}.`}>
-              {MISSION.name}
-            </span>
-            <DemoDataChip onOpen={() => openSources("about")} />
-          </span>
-        </Cell>
-        <Cell label="Crew" className="hidden 2xl:flex">
-          <span className="whitespace-nowrap text-sm text-ink" title={MISSION.crewLabel}>
-            <span className="num font-medium">{MISSION.crewId}</span> <span className="text-ink-3">demo identity</span>
-          </span>
-        </Cell>
-        <Cell label="Mission day" className="ml-auto md:ml-0">
-          <DayStepper />
-        </Cell>
-        <Cell label="MET (replay)" className="hidden lg:flex">
-          <span title={`Mission elapsed time, DDD/HH:MM:SS. Day ${day} runs from MET ${String(day - 1).padStart(3, "0")}/00:00:00 to ${String(day - 1).padStart(3, "0")}/23:59:59. Replay: day from the track, time of day from your clock in UTC (ship time).`}>
-            <MetClock day={day} />
-          </span>
-        </Cell>
-        <div className="hidden items-center border-l border-line px-3 md:flex">
-          <ScenarioSelector />
-        </div>
-        <div className="hidden items-center border-l border-line px-3 lg:flex">
-          <button
-            type="button"
-            onClick={() => tuesday.setTuesdayMode(!tuesday.tuesdayMode)}
-            className={`flex items-center gap-1.5 rounded-tile border px-2.5 py-1 font-cond text-xs font-semibold transition-colors ${
-              tuesday.tuesdayMode
-                ? "border-tue bg-tue/20 text-tue"
-                : "border-line bg-raised text-tue hover:border-tue hover:bg-tue/10"
-            }`}
-            title="Switch to Tuesday mode"
-          >
-            <TuesdayMark className="h-4 w-4" />
-            <span>TUESDAY MODE</span>
-          </button>
-        </div>
-        <Cell label="Network" className="hidden xl:flex">
-          <span className={`flex items-center gap-1.5 font-cond text-sm font-bold tracking-status ${online ? "text-ink" : "text-caution"}`}>
-            {online ? <Wifi aria-hidden="true" className="h-4 w-4" /> : <WifiOff aria-hidden="true" className="h-4 w-4" />}
-            {online ? "ONLINE" : "OFFLINE"}
-          </span>
-        </Cell>
-        <Cell label="Space weather" className="hidden sm:flex">
-          <button type="button" onClick={() => document.getElementById("weather")?.scrollIntoView({ block: "start" })} className={`flex items-center gap-1.5 font-cond text-sm font-bold tracking-status ${WX_STYLE[mode]}`} title="NASA DONKI data state">
-            {mode === "LIVE" || mode === "PARTIAL" ? <Satellite aria-hidden="true" className="h-4 w-4" /> : mode === "CACHED" || mode === "ARCHIVED" ? <Globe aria-hidden="true" className="h-4 w-4" /> : <CloudOff aria-hidden="true" className="h-4 w-4" />}
-            {mode === "PARTIAL" ? "PARTIAL LIVE" : mode}
-            <span className="hidden font-sans text-2xs font-normal normal-case tracking-normal text-ink-3 xl:inline">{wxSource}</span>
-          </button>
-        </Cell>
-        <Cell label="Local time" className="hidden 2xl:flex">
-          <LocalClock />
-        </Cell>
-        <Cell label="Status" className="flex">
+        <span className="hidden font-cond text-md font-bold tracking-label text-ink md:inline">ASTRA-MED</span>
+        <DayStepper />
+        <div className="ml-auto flex items-center gap-2 md:gap-3">
           <span className={`flex items-center gap-1 font-cond text-sm font-bold tracking-status ${STATUS_TEXT_CLASS[overall.status]}`}>
             <StatusIcon status={overall.status} className="h-4 w-4" />
-            <span className="sr-only sm:not-sr-only">{overall.status}</span>
+            {overall.status}
           </span>
-        </Cell>
-        <Cell label="Readiness" className="hidden sm:flex">
-          <ReadinessIndicator />
-        </Cell>
+          <button
+            type="button"
+            onClick={() => openSources("about")}
+            className="chip-tag whitespace-nowrap border-line-strong bg-raised text-ink-2 hover:border-cyan hover:text-ink"
+            title="Health readings, task history and scores are synthetic demonstration data, not real astronaut data. Select to learn more."
+          >
+            SYNTHETIC
+            <span className="sr-only"> demonstration data. Open About.</span>
+          </button>
+          <MoreMenu timelineOpen={timelineOpen} onToggleTimeline={onToggleTimeline} />
+        </div>
       </div>
-      <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-1.5 md:hidden">
-        <ScenarioSelector compact />
-        <button
-          type="button"
-          onClick={() => tuesday.setTuesdayMode(!tuesday.tuesdayMode)}
-          className={`flex items-center gap-1 rounded-tile border px-2 py-0.5 font-cond text-xs font-semibold ${
-            tuesday.tuesdayMode ? "border-tue bg-tue/20 text-tue" : "border-line bg-raised text-tue"
-          }`}
-        >
-          <TuesdayMark className="h-3.5 w-3.5" />
-          <span>Tuesday</span>
-        </button>
-        <DemoDataChip onOpen={() => openSources("about")} />
-        <span className={`flex items-center gap-1 font-cond text-xs font-bold ${online ? "text-ink-2" : "text-caution"}`}>
-          {online ? <Wifi aria-hidden="true" className="h-3.5 w-3.5" /> : <WifiOff aria-hidden="true" className="h-3.5 w-3.5" />}
-          {online ? "ONLINE" : "OFFLINE"}
-        </span>
-        <span className={`font-cond text-xs font-bold sm:hidden ${WX_STYLE[mode]}`}>WX {mode === "PARTIAL" ? "PARTIAL" : mode}</span>
-      </div>
+      <MissionClockStrip />
     </header>
   );
 }

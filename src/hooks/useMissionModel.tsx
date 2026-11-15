@@ -64,12 +64,12 @@ export function MissionModelProvider({ children }: { children: ReactNode }) {
   const completions = useMissionState((s) => s.completions);
   const followUpLog = useMissionState((s) => s.followUps);
   const { events: donkiEvents } = useSpaceWeather();
-  const { scenarioId, selectedDay: day, aredTargetMinutes, hydrationTargetLiters } = settings;
+  const { scenarioId, selectedDay: day, aredTargetMinutes, hydrationTargetLiters, radiationLimitMsv, pvtMinMs, pvtMaxMs } = settings;
 
   const days = useMemo(() => buildEffectiveDays(scenarioId, measurements), [scenarioId, measurements]);
   const engineInput = useMemo<EngineInput>(
-    () => ({ days, settings: { aredTargetMinutes, hydrationTargetLiters }, evaluatedAt: new Date().toISOString() }),
-    [days, aredTargetMinutes, hydrationTargetLiters],
+    () => ({ days, settings: { aredTargetMinutes, hydrationTargetLiters, radiationLimitMsv, pvtMinMs, pvtMaxMs }, evaluatedAt: new Date().toISOString() }),
+    [days, aredTargetMinutes, hydrationTargetLiters, radiationLimitMsv, pvtMinMs, pvtMaxMs],
   );
   const missionDays = useMemo(() => evaluateMissionDays(engineInput), [engineInput]);
   const diagnostics = useMemo(() => evaluateAllMetrics(engineInput, day), [engineInput, day]);

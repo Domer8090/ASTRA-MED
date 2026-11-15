@@ -188,7 +188,7 @@ export function AutoSyncPanel() {
   return (
     <Panel
       id="sync"
-      title="Auto Sync"
+      title="Devices (Auto Sync)"
       subtitle={
         <>
           Pair each wearable or instrument once. With auto sync on, readings are saved on the chosen interval, checked by the same rules as a manual

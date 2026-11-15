@@ -57,7 +57,7 @@ export function AstronautPanel() {
   return (
     <section id="body" aria-labelledby="body-title" className="panel relative flex min-w-0 flex-col">
       <header className="flex items-center gap-1 px-4 pt-3">
-        <h2 id="body-title" className="font-cond text-md font-bold uppercase tracking-label text-ink">
+        <h2 id="body-title" className="text-xl font-bold text-ink">
           Crew anatomy
         </h2>
         <InfoTip label="Crew anatomy">

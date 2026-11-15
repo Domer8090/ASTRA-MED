@@ -52,6 +52,8 @@ function worstOf(list: HealthStatus[]): HealthStatus {
 
 const name = (id: HazardId) => SPACEFLIGHT_HAZARDS.find((h) => h.id === id)!.name;
 
+const delayText = (m: number) => (m < 1 ? `${Math.max(1, Math.round(m * 60))} s` : `${m.toFixed(1)} min`);
+
 export function hazardMap(i: HazardMapInput): HazardCard[] {
   const d = i.diagnostics;
   const hazard = i.advisories.find((a) => a.level !== "ALL CLEAR");
@@ -88,7 +90,7 @@ export function hazardMap(i: HazardMapInput): HazardCard[] {
       status: null,
       chip: i.linkUp ? "GROUND LINK UP" : "NO GROUND LINK",
       facts: [
-        `Earth–Mars signal delay today ${i.signalDelayMinutes.toFixed(1)} min one way`,
+        `Signal to Earth ${delayText(i.signalDelayMinutes)} one way, ${delayText(i.signalDelayMinutes * 2)} for a reply`,
         i.queuedMessages ? `${i.queuedMessages} message${i.queuedMessages === 1 ? "" : "s"} queued for the medical officer` : "Every health function works on board without a link",
       ],
       note: "A question and its answer take at least twice the delay, so the crew acts first and reports after.",

@@ -9,7 +9,7 @@ export default {
         panel: "#0D1526",
         raised: "#111D31",
         line: { DEFAULT: "#1D344B", soft: "#16283B", strong: "#2A4A68" },
-        ink: { DEFAULT: "#E8F0FA", 2: "#91A4BA", 3: "#647A93" },
+        ink: { DEFAULT: "#E8F0FA", 2: "#91A4BA", 3: "#7D93AB" },
         cyan: { DEFAULT: "#42D9F5", deep: "#1B8FA6" },
         blue: { DEFAULT: "#4C8DFF" },
         /* Tuesday, the crew companion. Kept apart from status colours and the clinical cyan. */

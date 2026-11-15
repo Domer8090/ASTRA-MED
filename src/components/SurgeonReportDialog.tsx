@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { Copy, Download } from "lucide-react";
-import { earthMarsLightMinutes } from "../engine/lightTime";
+import { missionSignalMinutes } from "../utils/dates";
 import { buildSurgeonReport } from "../engine/reportEngine";
 import { useMissionModel } from "../hooks/useMissionModel";
 import { useToast } from "../hooks/useToast";
@@ -25,7 +25,7 @@ export function SurgeonReportDialog({ open, onClose }: { open: boolean; onClose:
             readiness: m.readiness,
             days: m.days,
             generatedAt: new Date().toISOString().slice(0, 16).replace("T", " "),
-            signalDelayMinutes: earthMarsLightMinutes(new Date()),
+            signalDelayMinutes: missionSignalMinutes(m.day),
             drift: m.drift,
           })
         : "",

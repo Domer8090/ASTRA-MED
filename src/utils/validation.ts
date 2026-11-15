@@ -247,6 +247,13 @@ export function sanitizeFollowUps(x: unknown): Record<number, Record<string, str
   return out;
 }
 
+/** PVT band: both ends inside the slider bounds and at least 10 ms apart, else the defaults. */
+function pvtBand(lo: unknown, hi: unknown, defaults: MissionSettings): { pvtMinMs: number; pvtMaxMs: number } {
+  const ok = (v: unknown): v is number => isFiniteNumber(v) && v >= PVT.sliderBounds.min && v <= PVT.sliderBounds.max;
+  if (ok(lo) && ok(hi) && hi - lo >= 10) return { pvtMinMs: Math.round(lo), pvtMaxMs: Math.round(hi) };
+  return { pvtMinMs: defaults.pvtMinMs, pvtMaxMs: defaults.pvtMaxMs };
+}
+
 export function sanitizeSettings(x: unknown, defaults: MissionSettings): MissionSettings | null {
   if (!isRecord(x)) return null;
   return {
@@ -260,6 +267,11 @@ export function sanitizeSettings(x: unknown, defaults: MissionSettings): Mission
       isFiniteNumber(x.hydrationTargetLiters) && x.hydrationTargetLiters >= 0.5 && x.hydrationTargetLiters <= 5
         ? Math.round(x.hydrationTargetLiters * 10) / 10
         : defaults.hydrationTargetLiters,
+    ...pvtBand(x.pvtMinMs, x.pvtMaxMs, defaults),
+    radiationLimitMsv:
+      isFiniteNumber(x.radiationLimitMsv) && x.radiationLimitMsv >= RADIATION.limit.min && x.radiationLimitMsv <= RADIATION.limit.max
+        ? Math.round(x.radiationLimitMsv)
+        : defaults.radiationLimitMsv,
     trendWindow: TREND_WINDOWS.includes(x.trendWindow as TrendWindow) ? (x.trendWindow as TrendWindow) : defaults.trendWindow,
     trendTab: TREND_TABS.includes(x.trendTab as TrendTabId) ? (x.trendTab as TrendTabId) : defaults.trendTab,
   };

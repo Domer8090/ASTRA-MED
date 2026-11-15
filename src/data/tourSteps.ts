@@ -1,5 +1,5 @@
 /**
- * Spotlight tour shown after the first Overview. Each step points at an
+ * Spotlight tour started from the welcome card or About. Each step points at an
  * element marked with `data-tour="<target>"`. Steps whose target is hidden at
  * the current screen size are skipped.
  */
@@ -11,53 +11,33 @@ export interface TourStep {
 
 export const TOUR_STEPS: readonly TourStep[] = [
   {
-    target: "status",
+    target: "summary-status",
     title: "Start here every day",
-    body: "Overall health, the body system to watch and the one next action. If you read nothing else, read this band.",
+    body: "One word tells you how today looks: NOMINAL, CAUTION or CRITICAL. The rings show your plan score, tasks done and exercise minutes.",
   },
   {
-    target: "body",
-    title: "Five body systems",
-    body: "Each system shows its status with a colour, an icon and a word. Select one to see what changed and what to do.",
+    target: "summary-top",
+    title: "Top four today",
+    body: "The four most important things right now, most urgent first: readings outside their range (with the range in big numbers), space weather, trends and tasks.",
   },
   {
-    target: "vitals",
-    title: "Today's readings",
-    body: "Each reading is compared with its configured range. Select a reading to open its trend. Use Log to add your own measurement.",
+    target: "summary-next",
+    title: "Do this next",
+    body: "The single most important step for today, with the reason behind it. Show me how opens a step-by-step guide.",
   },
   {
-    target: "intel",
-    title: "What changed, what to do",
-    body: "Plain-language explanation, the recommended next step and a short self-check for the selected system.",
+    target: "summary-readings",
+    title: "Your readings",
+    body: "Every reading with its date, value and range. Anything that needs a look comes first. Tap any reading to learn what it means and how to measure it.",
   },
   {
-    target: "hazards",
-    title: "Five hazards of spaceflight",
-    body: "NASA's five hazards, each tied to what ASTRA-MED watches today: radiation, isolation, distance from Earth, gravity and the closed cabin.",
-  },
-  {
-    target: "track",
-    title: "Replay the mission",
-    body: "Drag through 180 mission days. Orange and red ticks mark alerts. Demo start returns to the scenario's key day.",
-  },
-  {
-    target: "scenario",
-    title: "Three demo scenarios",
-    body: "A is a normal mission, B a cardiovascular caution, C a simulated solar particle event. Switching keeps anything you logged.",
-  },
-  {
-    target: "countermeasures",
-    title: "Daily countermeasures",
-    body: "Tick tasks as you finish them. Completion feeds the readiness score but never changes a health status.",
-  },
-  {
-    target: "weather",
-    title: "Space weather from NASA",
-    body: "Live NASA DONKI records and model forecasts of solar storms reaching Earth and Mars. Environmental hazard, never a personal dose.",
+    target: "summary-tasks",
+    title: "Today's tasks",
+    body: "Tick tasks as you finish them. They feed your plan score but never change a health status.",
   },
   {
     target: "tuesday",
     title: "Tuesday, your companion",
-    body: "Talk, check in on mood and energy, recharge with an Earth view or a game, and contact the medical officer, with or without a ground link.",
+    body: "Talk or type a reading, ask how you are doing, take a break, or contact the medical officer, with or without a link to Earth.",
   },
 ] as const;

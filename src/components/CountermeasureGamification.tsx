@@ -95,7 +95,7 @@ export function CountermeasureGamification() {
   return (
     <Panel
       id="countermeasures"
-      title="Today's countermeasures"
+      title="Health tasks"
       subtitle={
         <>
           <p>
@@ -168,7 +168,7 @@ export function CountermeasureGamification() {
       </ul>
 
       <div className="mt-5 border-t border-line pt-4">
-        <h3 className="flex items-center gap-1 label">
+        <h3 className="flex items-center gap-1 text-base font-semibold text-ink">
           Follow-up actions {openFollowUps ? <span className="text-caution">({openFollowUps} open)</span> : null}
           <InfoTip label="Follow-up actions">Pre-approved next steps for anything missed yesterday or outside its configured range today.</InfoTip>
         </h3>

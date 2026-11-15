@@ -239,7 +239,7 @@ function SettingsBox() {
         </p>
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={data.settings.voice} onChange={(e) => store.updateSettings({ voice: e.target.checked })} />
-          Read replies aloud (on-device voices only)
+          Also read typed chat replies aloud (spoken questions are always answered aloud unless Tuesday is muted)
         </label>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn btn-secondary min-h-[32px] text-xs" onClick={refreshModels}>

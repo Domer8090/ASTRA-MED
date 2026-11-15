@@ -124,11 +124,14 @@ export const RADIATION = {
   trailingWindowDays: 14,
   ruleProvenance: "astra-assumption" as ThresholdProvenance,
   /**
-   * Mission exposure budget in mSv. Deliberately null: exposure limits depend on
-   * mission, dose rate, particle type and approved radiation protection limits.
-   * While null, ASTRA-MED never raises CRITICAL from a cumulative value.
+   * Cumulative mission dose limit in mSv, adjustable with a slider from 50 to
+   * 2000 mSv. At or above it is CRITICAL; from `cautionFraction` of it is
+   * CAUTION. Default 600 mSv, the size of NASA's published career limit
+   * (NASA-STD-3001), used here only as a demo default, not as a flight rule.
    */
-  missionExposureBudgetMsv: null as number | null,
+  limit: { min: 50, max: 2000, step: 10, default: 600 },
+  cautionFraction: 0.8,
+  limitProvenance: "astra-assumption" as ThresholdProvenance,
   /** Daily dose entry bounds for a cumulative dosimeter reading delta. */
   entry: { min: 0, max: 5000 },
   staleAfterDays: 2,
@@ -136,6 +139,12 @@ export const RADIATION = {
 
 export const PVT = {
   unit: "ms",
+  /**
+   * In-range band for mean reaction time. Outside it is CAUTION. Each end is
+   * adjustable with a slider within `sliderBounds`.
+   */
+  range: { min: 200, max: 300 },
+  sliderBounds: { min: 150, max: 500, step: 5 },
   /** Baseline is the crew member's median over mission days 1–14. */
   baselineDays: 14,
   /** CAUTION when mean reaction time exceeds baseline by this fraction on consecutive checks. */
@@ -144,6 +153,12 @@ export const PVT = {
   provenance: "astra-assumption" as ThresholdProvenance,
   entry: { min: 100, max: 2000 },
   staleAfterDays: 5,
+} as const;
+
+/** Slider bounds for the plan targets that were already adjustable. */
+export const PLAN_SLIDERS = {
+  aredMinutes: { min: 10, max: 180, step: 5 },
+  hydrationLiters: { min: 0.5, max: 5, step: 0.1 },
 } as const;
 
 export const HYDRATION = {
@@ -191,7 +206,17 @@ export interface ThresholdRow {
   note?: string;
 }
 
-export function describeThresholds(aredTarget: number, hydrationTarget: number): ThresholdRow[] {
+export interface ThresholdLimits {
+  aredTargetMinutes: number;
+  hydrationTargetLiters: number;
+  radiationLimitMsv: number;
+  pvtMinMs: number;
+  pvtMaxMs: number;
+}
+
+export function describeThresholds(l: ThresholdLimits): ThresholdRow[] {
+  const aredTarget = l.aredTargetMinutes;
+  const hydrationTarget = l.hydrationTargetLiters;
   return [
     {
       indicator: "Resting heart rate",
@@ -248,16 +273,16 @@ export function describeThresholds(aredTarget: number, hydrationTarget: number):
     },
     {
       indicator: "Cumulative radiation",
-      reference: "Mission-dependent",
-      caution: "Daily dose > 2× trailing 14-day median",
-      critical: "Only against a configured mission exposure budget (not configured)",
+      reference: `Below ${Math.round(l.radiationLimitMsv * RADIATION.cautionFraction)} mSv`,
+      caution: `≥ ${Math.round(l.radiationLimitMsv * RADIATION.cautionFraction)} mSv, or daily dose > 2× the 14-day median`,
+      critical: `≥ ${l.radiationLimitMsv} mSv (mission limit)`,
       provenance: "astra-assumption",
       note: "Space-weather events never create a personal dose value.",
     },
     {
       indicator: "PVT reaction time",
-      reference: "Within 15% of days 1–14 median",
-      caution: "> 15% slower on 2 consecutive checks",
+      reference: `${l.pvtMinMs}–${l.pvtMaxMs} ms`,
+      caution: `Outside ${l.pvtMinMs}–${l.pvtMaxMs} ms, or > 15% slower than days 1–14 on 2 checks`,
       critical: "None configured",
       provenance: "astra-assumption",
     },

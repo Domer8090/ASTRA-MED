@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MISSION } from "../config/thresholds";
 import { getMissionTelemetry } from "../data/missionTelemetry";
 import { buildEffectiveDays } from "../services/telemetryService";
-import { formatMet, formatMetStamp, formatReadingStamp, missionDayOf, missionDayToIso, shipTimeToMinutes } from "./dates";
+import { formatMet, formatMetLong, formatMetStamp, formatMissionDate, formatReadingDate, formatReadingStamp, missionDayOf, missionDayToIso, shipTimeToMinutes } from "./dates";
 
 describe("mission day and MET", () => {
   it("day N starts at MET (N-1)/00:00 and ends before MET N/00:00", () => {
@@ -36,5 +36,11 @@ describe("mission day and MET", () => {
     expect(shipTimeToMinutes("06:41")).toBe(401);
     expect(shipTimeToMinutes("6:41")).toBeNull();
     expect(shipTimeToMinutes("24:00")).toBeNull();
+  });
+
+  it("formats mission dates for people", () => {
+    expect(formatMissionDate(1)).toBe("4 May 2026");
+    expect(formatReadingDate(118, missionDayToIso(118, 6 * 60 + 43))).toBe("29 Aug 2026, 06:43");
+    expect(formatMetLong(118, new Date("2026-11-15T07:39:20Z"))).toBe("117 d 07:39:20");
   });
 });

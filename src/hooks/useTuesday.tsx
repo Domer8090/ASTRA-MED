@@ -1,12 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { knowledgeIndex } from "../data/knowledgeBase";
-import { earthMarsLightMinutes } from "../engine/lightTime";
+import { missionSignalMinutes } from "../utils/dates";
 import { retrieve } from "../engine/retrieval";
 import {
   actionsFor,
   buildHealthBrief,
   buildModelMessages,
+  buildVoiceMessages,
+  cleanSpoken,
   CRISIS_REPLY,
+  hasUnsupportedNumber,
+  takeSentences,
+  TUESDAY_VOICE_PROMPT,
+  MIN_TIP_SCORE,
   detectIntent,
   readingsInText,
   reportedVitalsReply,
@@ -18,9 +24,10 @@ import {
   safetyFilter,
   type TuesdayContext,
 } from "../engine/tuesdayEngine";
-import { chooseModels, listLocalModels, streamChat, type ModelChoice } from "../services/localModel";
+import { chooseModels, listLocalModels, modelRecentlySlow, streamChat, warmUpModel, type ModelChoice } from "../services/localModel";
 import { createTuesdayStore, type TuesdayData, type TuesdayStore } from "../state/tuesdayStore";
 import { useTuesdaySpeech } from "./useTuesdaySpeech";
+import type { SpeechStream } from "../services/voiceSynth";
 import type { SourceRef } from "../types/health";
 import { useMissionModel } from "./useMissionModel";
 import { useOnlineStatus } from "./useOnlineStatus";
@@ -36,6 +43,16 @@ export interface ModelStatus {
 export interface ContactRequest {
   priority: "urgent" | "routine";
   report: string;
+}
+
+/** Where a spoken answer goes: the voice loop supplies this. */
+export interface VoiceSink {
+  /** Say a complete, fixed text (safety replies, fallbacks). */
+  speak: (text: string) => void;
+  /** Start a reply that is spoken sentence by sentence while the model writes it. Null when muted. */
+  open: () => SpeechStream | null;
+  /** Show the reply so far on screen. */
+  show: (text: string) => void;
 }
 
 export interface Attachment {
@@ -68,7 +85,12 @@ interface TuesdayValue {
   simulatedLos: boolean;
   setSimulatedLos: (los: boolean) => void;
   busy: boolean;
-  ask: (text: string, attachment?: Attachment, voiceOutput?: (text: string) => void) => Promise<void>;
+  /**
+   * Answer a message. With `voice`, the answer is spoken. `consoleResult` is what the
+   * console already did or knows for this request; the model words it, and it is
+   * said as written whenever the model is unavailable or slow.
+   */
+  ask: (text: string, attachment?: Attachment, voice?: VoiceSink, consoleResult?: string) => Promise<void>;
   stop: () => void;
   context: TuesdayContext;
 }
@@ -113,7 +135,12 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
     setModel((s) => ({ ...s, state: "checking" }));
     void listLocalModels(endpoint).then((names) => {
       if (!names || !names.length) setModel({ state: "none", installed: names ?? [], choice: { chat: null, medical: null } });
-      else setModel({ state: "ready", installed: names, choice: chooseModels(names, { chat: chatModel, medical: medicalModel }) });
+      else {
+        const choice = chooseModels(names, { chat: chatModel, medical: medicalModel });
+        setModel({ state: "ready", installed: names, choice });
+        // Load the model and cache Tuesday's fixed instructions. No health data is sent.
+        if (choice.chat) warmUpModel(endpoint, choice.chat, [{ role: "system", content: TUESDAY_VOICE_PROMPT }]);
+      }
     });
   }, [endpoint, useModel, chatModel, medicalModel]);
 
@@ -132,7 +159,7 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
       trends: m.trends,
       drift: m.drift,
       primaryAction: m.primaryAction.text,
-      lightMinutes: earthMarsLightMinutes(new Date()),
+      lightMinutes: missionSignalMinutes(m.day),
       recentEnergy,
     }),
     [m.day, m.overall.status, m.diagnostics, m.systems, m.advisories, m.trends, m.drift, m.primaryAction.text, recentEnergy],
@@ -140,18 +167,26 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
 
   const stop = useCallback(() => abort.current?.abort(), []);
 
+  const busyRef = useRef(false);
   const ask = useCallback(
-    async (text: string, attachment?: Attachment, voiceOutput?: (text: string) => void) => {
+    async (text: string, attachment?: Attachment, voiceSink?: VoiceSink, consoleResult?: string) => {
       const question = text.trim() || (attachment?.kind === "lab" ? "Read this lab report." : attachment ? "Look at this photo." : "");
-      if (!question || busy) return;
-      const outputVoice = voiceOutput ?? speech.speak;
+      if (!question) return;
+      if (busyRef.current) {
+        // Talking over Tuesday interrupts the answer in progress, as with a person.
+        if (!voiceSink) return;
+        abort.current?.abort();
+      }
+      const say = voiceSink?.speak ?? speech.speak;
       store.addMessage({ role: "user", text: question, ...(attachment ? { attachment: attachment.kind } : {}) });
       const intent = attachment ? "other" : detectIntent(question);
-      const voice = store.getState().settings.voice;
+      // Spoken questions are always answered aloud (the Voice replies switch can still mute it).
+      // Typed chat questions follow Tuesday's own voice setting.
+      const voice = voiceSink ? true : store.getState().settings.voice;
 
       if (intent === "crisis") {
         store.addMessage({ role: "tuesday", text: CRISIS_REPLY, via: "core", actions: actionsFor("crisis", context) });
-        if (voice) outputVoice(CRISIS_REPLY);
+        if (voice) say(CRISIS_REPLY);
         return;
       }
 
@@ -160,24 +195,30 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
       if (vitalsReply || intent === "urgent") {
         const reply = vitalsReply ?? { text: URGENT_REPLY, actions: actionsFor("urgent", context) };
         store.addMessage({ role: "tuesday", text: reply.text, via: "core", actions: reply.actions });
-        if (voice) outputVoice(reply.text);
+        if (voice) say(reply.text);
         return;
       }
 
-      const passages = attachment ? [] : retrieve(knowledgeIndex(), question, 4);
+      // With a console result the facts are already known; the library is only needed for open questions.
+      const passages = attachment || consoleResult ? [] : retrieve(knowledgeIndex(), question, 4);
       const target = attachment ? model.choice.medical : model.choice.chat;
-      if (model.state !== "ready" || !target) {
+      const fallback = () => (consoleResult ? { text: consoleResult, actions: [] } : offlineReply(intent, context, passages));
+      // Health facts the console already worked out are said as written, never reworded by a
+      // model (a small model was found to invent readings). No model, or it was just too slow:
+      // also answer at once from the console and onboard rules.
+      if (consoleResult || (!attachment && modelRecentlySlow()) || model.state !== "ready" || !target) {
         const reply = attachment
           ? {
               text: `Reading ${attachment.kind === "lab" ? "a lab report" : "a photo"} needs a multimodal model on this device, such as MedGemma 1.5 4B. ${model.state === "ready" ? "None is installed." : "No local model is running."} Nothing was sent anywhere; the image stayed in this browser.`,
               actions: [],
             }
-          : offlineReply(intent, context, passages);
+          : fallback();
         store.addMessage({ role: "tuesday", text: reply.text, via: "core", actions: reply.actions, sources: uniqueSources(passages.slice(0, 1).map((p) => p.doc.source)) });
-        if (voice) outputVoice(reply.text);
+        if (voice) say(reply.text);
         return;
       }
 
+      busyRef.current = true;
       setBusy(true);
       const controller = new AbortController();
       abort.current = controller;
@@ -188,28 +229,93 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
         .slice(-9, -1)
         .map((x) => ({ role: x.role === "user" ? ("user" as const) : ("assistant" as const), content: x.text }));
       const brief = buildHealthBrief(context);
+      // Only passages that really match, and fewer for voice: every extra token is reading time.
+      const tips = passages.filter((p) => p.score >= MIN_TIP_SCORE).slice(0, voiceSink ? 2 : 4);
       const messages = attachment
         ? [{ role: "user" as const, content: `${attachment.kind === "lab" ? LAB_PROMPT : IMAGE_PROMPT}\n\nAstronaut's note: ${question}`, images: [attachment.base64] }]
-        : buildModelMessages(brief, passages, history, question);
+        : voiceSink
+          ? buildVoiceMessages(brief, tips, history.slice(-6), question, consoleResult)
+          : buildModelMessages(brief, tips, history, consoleResult ? `${question}\n\nCONSOLE RESULT (true)\n${consoleResult}` : question);
+
+      // Spoken answers: each finished sentence is checked and voiced at once, while the model keeps writing.
+      const given = messages.map((x) => x.content).join("\n");
+      const spoken: string[] = [];
+      // A holder, because the stream is opened inside the token callback.
+      const out: { stream: SpeechStream | null } = { stream: null };
+      let checked = 0;
+      let safetyNoted = false;
+      const voiceSentences = (soFar: string, final: boolean) => {
+        if (!voiceSink) return;
+        const { done, rest } = takeSentences(soFar);
+        const all = final && rest.trim() ? [...done, rest.trim()] : done;
+        for (; checked < all.length; checked++) {
+          const sentence = cleanSpoken(all[checked]!);
+          if (!sentence) continue;
+          let line = sentence;
+          if (safetyFilter(sentence).removed) {
+            if (safetyNoted) continue;
+            safetyNoted = true;
+            line = "That part is a question for the medical officer, so I'll leave it to them.";
+          } else if (hasUnsupportedNumber(sentence, given)) continue;
+          spoken.push(line);
+          out.stream ??= voiceSink.open();
+          out.stream?.push(line);
+          voiceSink.show(spoken.join(" "));
+          store.updateMessage(placeholder.id, { text: spoken.join(" ") }, false);
+        }
+      };
+
       const raw = await streamChat({
         endpoint,
         model: target,
         messages,
         signal: controller.signal,
+        ...(voiceSink ? { firstTokenTimeoutMs: 8_000, temperature: 0.6 } : {}),
         ...(attachment?.kind === "lab" ? { format: "json" as const } : {}),
-        onToken: attachment?.kind === "lab" ? undefined : (t) => store.updateMessage(placeholder.id, { text: safetyFilter(t).text }, false),
+        onToken:
+          attachment?.kind === "lab"
+            ? undefined
+            : voiceSink
+              ? (t) => voiceSentences(t, false)
+              : (t) => store.updateMessage(placeholder.id, { text: safetyFilter(t).text }, false),
       });
-      setBusy(false);
-      abort.current = null;
+      const interrupted = controller.signal.aborted;
+      if (abort.current === controller) {
+        abort.current = null;
+        busyRef.current = false;
+        setBusy(false);
+      }
+
+      if (voiceSink) {
+        if (!raw.startsWith("ERROR:")) voiceSentences(raw, true);
+        const s = out.stream;
+        if (interrupted) {
+          s?.end();
+          store.updateMessage(placeholder.id, { text: spoken.join(" ") || "(Interrupted.)", via: "model", model: target });
+          return;
+        }
+        if (!spoken.length) {
+          // The model failed, timed out or said nothing usable: say the console's own answer.
+          s?.end();
+          const fb = fallback();
+          store.updateMessage(placeholder.id, { text: fb.text, via: "core", actions: fb.actions });
+          say(fb.text);
+          return;
+        }
+        s?.end();
+        store.updateMessage(placeholder.id, { text: spoken.join(" "), via: "model", model: target, actions: actionsFor(intent, context) });
+        return;
+      }
 
       if (raw.startsWith("ERROR:")) {
-        const fallback = attachment ? { text: `${raw.slice(7)} Nothing left this device.`, actions: [] } : offlineReply(intent, context, passages);
+        const fb = attachment ? { text: `${raw.slice(7)} Nothing left this device.`, actions: [] } : fallback();
         store.updateMessage(placeholder.id, {
-          text: attachment ? fallback.text : `${fallback.text}\n\n(${raw.slice(7)} Answered with onboard rules.)`,
+          text: attachment ? fb.text : `${fb.text}\n\n(${raw.slice(7)} Answered with onboard rules.)`,
           via: "core",
-          actions: fallback.actions,
+          actions: fb.actions,
           sources: uniqueSources(passages.slice(0, 1).map((p) => p.doc.source)),
         });
+        if (voice && !attachment) say(fb.text);
         return;
       }
 
@@ -237,9 +343,9 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
         sources: uniqueSources(passages.map((p) => p.doc.source)),
         ...(removed ? { filtered: removed } : {}),
       });
-      if (voice) outputVoice(finalText);
+      if (voice) say(finalText);
     },
-    [busy, context, endpoint, model, store, speech.speak],
+    [context, endpoint, model, store, speech.speak],
   );
 
   const value = useMemo<TuesdayValue>(

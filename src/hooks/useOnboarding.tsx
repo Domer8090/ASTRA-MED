@@ -1,6 +1,7 @@
+import { setConsoleView } from "./useConsoleView";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createStorageService, STORAGE_KEYS } from "../services/storageService";
-import { useUiActions, useUiState } from "./useUi";
+import { useUiState } from "./useUi";
 
 interface OnboardingRecord {
   overviewSeen: boolean;
@@ -8,6 +9,9 @@ interface OnboardingRecord {
 }
 
 interface OnboardingValue {
+  /** First visit: show the welcome card on the Summary. */
+  showWelcome: boolean;
+  dismissWelcome: () => void;
   tourActive: boolean;
   startTour: () => void;
   /** Ends the tour and remembers it, whether finished or skipped. */
@@ -26,14 +30,13 @@ export function sanitizeOnboarding(raw: unknown): OnboardingRecord | null {
 const OnboardingContext = createContext<OnboardingValue | null>(null);
 
 /**
- * First visit: open the Overview. Closing it is remembered in localStorage and
- * starts the spotlight tour once. Both can be replayed from the Overview.
+ * First visit: the Summary shows a small welcome card offering the tour and
+ * About. Nothing opens by itself. Dismissal is remembered in localStorage.
  */
 export function OnboardingProvider({ children }: { children: ReactNode }) {
   const [record, setRecord] = useState<OnboardingRecord>(() => storage.read(STORAGE_KEYS.onboarding, sanitizeOnboarding, DEFAULT).value);
   const [tourActive, setTourActive] = useState(false);
   const { sourcesTab } = useUiState();
-  const { openSources } = useUiActions();
   const wasOpen = useRef(false);
 
   const save = useCallback((next: OnboardingRecord) => {
@@ -41,29 +44,29 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
     setRecord(next);
   }, []);
 
-  // Deep links (a hash such as #weather or #sources-thresholds) go straight to their target.
-  useEffect(() => {
-    if (!record.overviewSeen && !window.location.hash) openSources("about");
-    // Runs once on first mount only.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
+  // Opening the About window counts as having seen the welcome.
   useEffect(() => {
     const open = sourcesTab !== null;
-    if (wasOpen.current && !open && !record.overviewSeen) {
-      save({ ...record, overviewSeen: true });
-      if (!record.tourDone) setTourActive(true);
-    }
+    if (wasOpen.current && !open && !record.overviewSeen) save({ ...record, overviewSeen: true });
     wasOpen.current = open;
   }, [sourcesTab, record, save]);
 
-  const startTour = useCallback(() => setTourActive(true), []);
+  const dismissWelcome = useCallback(() => save({ ...record, overviewSeen: true }), [record, save]);
+  const startTour = useCallback(() => {
+    save({ ...record, overviewSeen: true });
+    // The tour walks the Summary view; open it from wherever the crew member is.
+    setConsoleView("summary");
+    window.scrollTo({ top: 0, behavior: "auto" });
+    setTourActive(false);
+    window.setTimeout(() => setTourActive(true), 0);
+  }, [record, save]);
   const endTour = useCallback(() => {
     setTourActive(false);
     save({ overviewSeen: true, tourDone: true });
   }, [save]);
 
-  const value = useMemo(() => ({ tourActive, startTour, endTour }), [tourActive, startTour, endTour]);
+  const showWelcome = !record.overviewSeen;
+  const value = useMemo(() => ({ showWelcome, dismissWelcome, tourActive, startTour, endTour }), [showWelcome, dismissWelcome, tourActive, startTour, endTour]);
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;
 }
 

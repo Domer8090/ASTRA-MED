@@ -1,4 +1,5 @@
 import { MISSION } from "../config/thresholds";
+import { shipEarthLightMinutes } from "../engine/lightTime";
 
 /*
  * Mission time model
@@ -73,6 +74,26 @@ export function formatMet(selectedDay: number, now: Date): string {
   return `${padDay(selectedDay - 1)}/${hh}:${mm}:${ss}`;
 }
 
+const missionDateFmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+
+/** Calendar date of a mission day in ship time (UTC), e.g. "29 Aug 2026". Synthetic mission calendar. */
+export function formatMissionDate(missionDay: number): string {
+  return missionDateFmt.format(Date.parse(missionDayToIso(missionDay)));
+}
+
+/** A reading's time for people: "29 Aug 2026, 06:43". Used wherever a reading date is shown. */
+export function formatReadingDate(missionDay: number, iso: string): string {
+  const t = Date.parse(iso);
+  const time = Number.isNaN(t) ? "" : `, ${String(new Date(t).getUTCHours()).padStart(2, "0")}:${String(new Date(t).getUTCMinutes()).padStart(2, "0")}`;
+  return `${formatMissionDate(missionDay)}${time}`;
+}
+
+/** Mission elapsed time in words-and-digits: "117 d 07:39:20". */
+export function formatMetLong(selectedDay: number, now: Date): string {
+  const [d, hms] = formatMet(selectedDay, now).split("/");
+  return `${Number(d)} d ${hms}`;
+}
+
 const localDateTime = new Intl.DateTimeFormat(undefined, {
   year: "numeric",
   month: "short",
@@ -127,3 +148,14 @@ export function isoDateUtc(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
+
+/** Ship-to-Earth one-way signal time on a mission day of the demo transit, in minutes. */
+export function missionSignalMinutes(missionDay: number): number {
+  return shipEarthLightMinutes(missionDay, MISSION.totalDays, new Date(missionDayToIso(missionDay, 12 * 60)));
+}
+
+/** A signal delay for people: seconds under a minute ("8 s"), else minutes ("4.3 min"). */
+export function formatSignalDelay(minutes: number): { value: string; unit: string } {
+  if (minutes < 1) return { value: String(Math.max(1, Math.round(minutes * 60))), unit: "s" };
+  return { value: minutes.toFixed(1), unit: "min" };
+}

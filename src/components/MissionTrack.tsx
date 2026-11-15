@@ -64,7 +64,7 @@ export function MissionTrack() {
   return (
     <div data-tour="track" className="flex items-center gap-2 border-b border-line bg-space px-3 py-1.5 md:px-5">
       <label htmlFor={inputId} className="label hidden shrink-0 sm:block">
-        Day track
+        Mission timeline
         <span className="sr-only">
           . One tick per mission day; tall ticks mark CAUTION or CRITICAL. {counts.c} caution and {counts.k} critical days in this scenario.
         </span>
@@ -101,7 +101,7 @@ export function MissionTrack() {
         className={`btn btn-ghost min-h-[28px] shrink-0 px-2 text-xs ${day === scenario.focusDay ? "text-cyan" : ""}`}
         onClick={() => store.setSelectedDay(scenario.focusDay)}
       >
-        <span className="hidden md:inline">Demo start&nbsp;</span>D{scenario.focusDay}
+        <span className="hidden md:inline">Jump to key day&nbsp;</span>{scenario.focusDay}
       </button>
       <p className="sr-only">
         Scenario events: {scenario.events.map((e) => `${e.title}, days ${e.startDay} to ${e.endDay}`).join("; ")}.

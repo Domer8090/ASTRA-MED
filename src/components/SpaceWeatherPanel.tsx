@@ -12,7 +12,7 @@ import { useToast } from "../hooks/useToast";
 import { useUiActions } from "../hooks/useUi";
 import { DONKI_TYPES, usingDemoKey } from "../services/nasaDonkiApi";
 import type { DonkiDataSource, DonkiEvent, DonkiEventType, EnvironmentAdvisory, SpaceWeatherMode } from "../types/health";
-import { formatLocalDateTime, formatRelative, padDay } from "../utils/dates";
+import { formatLocalDateTime, formatMissionDate, formatRelative } from "../utils/dates";
 import { FollowUpCard } from "./shared/FollowUpCard";
 import { Panel } from "./shared/Panel";
 import { ProvenanceTag, type Provenance } from "./shared/ProvenanceTag";
@@ -20,8 +20,8 @@ import { InfoTip } from "./shared/InfoTip";
 
 const TYPE_LABEL: Record<DonkiEventType, string> = {
   FLR: "Solar flares",
-  SEP: "Solar energetic particles",
-  CME: "Coronal mass ejections",
+  SEP: "Solar particle storms (SEP)",
+  CME: "Solar eruptions (CME)",
   NOTIFICATION: "Notifications",
 };
 
@@ -41,17 +41,25 @@ const SOURCE_TAG: Record<DonkiDataSource, { kind: Provenance; label: string }> =
 
 type Filter = "ALL" | DonkiEventType;
 
+/** Plain names for DONKI event types. */
+const PLAIN_TYPE: Record<string, string> = {
+  FLR: "Solar flare",
+  SEP: "Radiation storm",
+  CME: "Solar eruption (CME)",
+  NOTIFICATION: "Notice",
+};
+
 function EventRow({ e }: { e: DonkiEvent }) {
   const [open, setOpen] = useState(false);
   const id = `ev-${e.type}-${e.id.replace(/[^a-zA-Z0-9]/g, "")}`;
   return (
     <li className="[content-visibility:auto] [contain-intrinsic-size:auto_64px]">
       <button type="button" aria-expanded={open} aria-controls={id} onClick={() => setOpen((o) => !o)} className="flex w-full items-start gap-3 px-3 py-2.5 text-left hover:bg-raised/60">
-        <span className={`mt-0.5 w-12 shrink-0 font-cond text-xs font-bold tracking-label ${e.type === "SEP" ? "text-caution" : e.type === "FLR" ? "text-[#f8c36b]" : e.type === "CME" ? "text-blue" : "text-ink-2"}`}>{e.type === "NOTIFICATION" ? "NOTICE" : e.type}</span>
+        <span className={`mt-0.5 w-28 shrink-0 text-sm font-semibold ${e.type === "SEP" ? "text-caution" : e.type === "FLR" ? "text-[#f8c36b]" : e.type === "CME" ? "text-blue" : "text-ink-2"}`}>{PLAIN_TYPE[e.type] ?? e.type}</span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-base text-ink">{e.title}</span>
-          <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-ink-2">
-            <span className="num" title={e.startTime ?? "No start time supplied"}>{e.startTime ? formatLocalDateTime(e.startTime) : "No start time in record"}</span>
+          <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-sm text-ink-2">
+            <span className="font-semibold text-ink" title={e.startTime ?? "No start time supplied"}>{e.startTime ? formatLocalDateTime(e.startTime) : "No start time in record"}</span>
             {e.severity ? <span className="chip-tag border-line-strong text-ink">{e.severity}</span> : null}
             <ProvenanceTag kind={SOURCE_TAG[e.dataSource].kind} label={SOURCE_TAG[e.dataSource].label} />
           </span>
@@ -94,11 +102,12 @@ function HazardAssessment({ a, day }: { a: EnvironmentAdvisory | undefined; day:
       <div className="flex items-start gap-3 rounded-tile border border-line p-3">
         <CheckCircle2 aria-hidden="true" className="mt-0.5 h-4 w-4 text-nominal" />
         <div>
-          <p className="flex items-center gap-1 label">
-            Environment, day {padDay(day)}
+          <p className="flex items-center gap-1 text-sm font-semibold text-ink-2">
+            {formatMissionDate(day)}
             <InfoTip label="Environment">Scenario C simulates a solar particle event: precursor day 130, event days 131–133, all clear day 134.</InfoTip>
           </p>
-          <p className="mt-1 text-sm text-ink">No environmental hazard today.</p>
+          <p className="mt-1 text-lg font-semibold text-ink">No solar storm or radiation warning today.</p>
+          <p className="text-base text-ink-2">Nothing to do. Keep your normal routine.</p>
         </div>
       </div>
     );
@@ -109,8 +118,9 @@ function HazardAssessment({ a, day }: { a: EnvironmentAdvisory | undefined; day:
     <div className={`rounded-tile border p-3 md:p-4 ${tone}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="flex items-center gap-1 label">
-            Environment, day {padDay(day)}
+          <p className="flex items-center gap-1 text-sm font-semibold text-ink-2">
+            {formatMissionDate(day)}
+            {a.missionDayRange ? ` · event ${formatMissionDate(a.missionDayRange[0])} – ${formatMissionDate(a.missionDayRange[1])}` : a.startTime ? ` · started ${formatLocalDateTime(a.startTime)} (real-world date)` : ""}
             <InfoTip label="Why it matters">
               <p>{a.whyItMatters}</p>
               {a.source === "scenario" ? <p className="text-xs">Dosimeter model: {SEP_DOSE_MODEL_SUMMARY} The hazard level itself never sets a dose.</p> : null}
@@ -124,11 +134,12 @@ function HazardAssessment({ a, day }: { a: EnvironmentAdvisory | undefined; day:
         </div>
         <ProvenanceTag kind={a.source === "scenario" ? "SCENARIO" : "LIVE"} label={a.provenanceLabel} />
       </div>
-      <p className="mt-2 text-sm text-ink">{a.summary}</p>
+      <p className="mt-2 text-base text-ink">{a.summary}</p>
+      <p className="mt-1 text-base font-semibold text-ink">What to do: <span className="font-normal">{a.nextStep}</span></p>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <div>
-          <h4 className="label">Relationship to body systems</h4>
+          <h4 className="text-base font-semibold text-ink">Relationship to body systems</h4>
           <ul className="mt-1.5 space-y-1.5">
             {a.relations.map((r) => (
               <li key={r.id} className="rounded-tile border border-line px-3 py-2">
@@ -145,7 +156,7 @@ function HazardAssessment({ a, day }: { a: EnvironmentAdvisory | undefined; day:
           </ul>
         </div>
         <div>
-          <h4 className="label">Protective action sequence (in priority order)</h4>
+          <h4 className="text-base font-semibold text-ink">Protective action sequence (in priority order)</h4>
           {sequence ? (
             <ul className="mt-1.5">
               <FollowUpCard f={sequence} day={day} />
@@ -257,7 +268,7 @@ export function SpaceWeatherPanel() {
     <Panel
       id="weather"
       title="Space weather monitor"
-      subtitle={<><p>What the space environment means for the mission now, then the NASA DONKI records behind it.</p><p>Environmental hazard, never a personal dose. Flare, SEP and CME records describe space near Earth; personal exposure comes only from the dosimeter.</p><p>Source: NASA DONKI (CCMC DONKI API and api.nasa.gov). NOAA SWPC is the official US forecast source. Only date ranges are sent; no health data leaves this browser.</p></>}
+      subtitle={<><p>Solar storms and radiation warnings, in plain words, with their dates.</p><p>This is about the space environment, not your personal dose. Your dosimeter gives your personal dose.</p><p>Source: NASA DONKI (CCMC DONKI API and api.nasa.gov). NOAA SWPC is the official US forecast source. Only date ranges are sent; no health data leaves this browser.</p></>}
       actions={
         <>
           <ProvenanceTag kind={tag.kind} label={tag.label} />
@@ -304,7 +315,7 @@ export function SpaceWeatherPanel() {
       <details className="group mt-4 rounded-tile border border-line" open={rawOpen} onToggle={(e) => setRawOpen(e.currentTarget.open)}>
         <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
           <span className="min-w-0">
-            <span className="block font-cond text-sm font-bold text-ink">NASA DONKI event records</span>
+            <span className="block text-base font-semibold text-ink">Recent solar events near Earth (NASA DONKI)</span>
             <span className="block text-xs text-ink-2">
               <span className="num">{wx.events.length}</span> records: <span className="num">{counts.FLR}</span> flares, <span className="num">{counts.SEP}</span> SEP, <span className="num">{counts.CME}</span> CME, <span className="num">{counts.NOTIFICATION}</span> notices.{" "}
               {wx.lastLiveAt ? `Last live response ${formatRelative(wx.lastLiveAt, now)}.` : "No live response yet this session."}
@@ -316,7 +327,7 @@ export function SpaceWeatherPanel() {
           </span>
         </summary>
         <div className="border-t border-line px-3 pb-3 pt-3">
-          <h4 className="label">Feed by event type</h4>
+          <h4 className="text-base font-semibold text-ink">Feed by event type</h4>
           <div className="mt-1.5 overflow-x-auto rounded-tile border border-line">
             <table className="w-full min-w-[640px] border-collapse text-left text-sm">
               <caption className="sr-only">Data shown and last request result for each DONKI event type</caption>

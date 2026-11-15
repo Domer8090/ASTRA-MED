@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { CloudOff, DatabaseZap } from "lucide-react";
 import { useMissionState } from "../hooks/useMissionState";
 import { useSpaceWeather } from "../hooks/useSpaceWeather";
@@ -10,6 +11,7 @@ import { GuidanceDrawer } from "./GuidanceDrawer";
 import { HazardMap } from "./HazardMap";
 import { MedicalOfficerDashboard } from "./officer/MedicalOfficerDashboard";
 import { useView } from "../hooks/useView";
+import { useConsoleView } from "../hooks/useConsoleView";
 import { MeasurementForm } from "./MeasurementForm";
 import { MissionConsole } from "./console/MissionConsole";
 import { MissionTrack } from "./MissionTrack";
@@ -55,8 +57,36 @@ function SystemNotices() {
   );
 }
 
+/** Everything beyond the Summary. Shown only in the Details view. */
+function DetailSections() {
+  const view = useConsoleView();
+  if (view !== "details") return null;
+  return (
+    <>
+      <PanelBoundary name="Hazards">
+        <HazardMap />
+      </PanelBoundary>
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(380px,1fr)]">
+        <PanelBoundary name="Health tasks">
+          <CountermeasureGamification />
+        </PanelBoundary>
+        <PanelBoundary name="Alerts">
+          <AlertsPanel />
+        </PanelBoundary>
+      </div>
+      <PanelBoundary name="Devices">
+        <AutoSyncPanel />
+      </PanelBoundary>
+      <PanelBoundary name="Space weather">
+        <SpaceWeatherPanel />
+      </PanelBoundary>
+    </>
+  );
+}
+
 export function AppShell() {
   const view = useView();
+  const [timelineOpen, setTimelineOpen] = useState(false);
   if (view === "medical-officer") {
     return (
       <>
@@ -73,34 +103,13 @@ export function AppShell() {
       <NavRail />
       <div className="lg:pl-[var(--rail-w)]">
         <div data-sticky-header className="sticky top-0 z-30">
-          <TopTelemetryBar />
-          <div className="hidden md:block">
-            <MissionTrack />
-          </div>
-        </div>
-        <div className="md:hidden">
-          <MissionTrack />
+          <TopTelemetryBar timelineOpen={timelineOpen} onToggleTimeline={() => setTimelineOpen((o) => !o)} />
+          {timelineOpen ? <MissionTrack /> : null}
         </div>
         <main id="main" tabIndex={-1} className="mx-auto flex max-w-[1760px] flex-col gap-3 px-3 py-3 outline-none md:px-4">
           <SystemNotices />
           <MissionConsole />
-          <PanelBoundary name="Hazards">
-            <HazardMap />
-          </PanelBoundary>
-          <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.3fr)_minmax(380px,1fr)]">
-            <PanelBoundary name="Countermeasures">
-              <CountermeasureGamification />
-            </PanelBoundary>
-            <PanelBoundary name="Alerts">
-              <AlertsPanel />
-            </PanelBoundary>
-          </div>
-          <PanelBoundary name="Auto Sync">
-            <AutoSyncPanel />
-          </PanelBoundary>
-          <PanelBoundary name="Space weather">
-            <SpaceWeatherPanel />
-          </PanelBoundary>
+          <DetailSections />
           <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-line pt-4 text-xs text-ink-3">
             <p className="max-w-[90ch]">
               ASTRA-MED is a NASA Space Apps Challenge 2026 prototype. Synthetic demonstration data and prototype thresholds; not an operational NASA medical device, and not endorsed by NASA.

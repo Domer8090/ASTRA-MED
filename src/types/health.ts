@@ -401,6 +401,11 @@ export interface MissionSettings {
   selectedDay: number;
   aredTargetMinutes: number;
   hydrationTargetLiters: number;
+  /** Cumulative mission dose limit, mSv (slider, 50–2000). */
+  radiationLimitMsv: number;
+  /** PVT in-range band, ms. */
+  pvtMinMs: number;
+  pvtMaxMs: number;
   trendWindow: TrendWindow;
   trendTab: TrendTabId;
 }

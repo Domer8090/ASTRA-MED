@@ -13,7 +13,7 @@ export const COLORS = {
   lineStrong: "#2A4A68",
   ink: "#E8F0FA",
   ink2: "#91A4BA",
-  ink3: "#647A93",
+  ink3: "#7D93AB",
   cyan: "#42D9F5",
   blue: "#4C8DFF",
   nominal: "#22C55E",

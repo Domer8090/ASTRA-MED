@@ -2,7 +2,7 @@
  * Gauge geometry for instrument tiles. Built from the configured thresholds so
  * presentation components never compare values with thresholds themselves.
  */
-import { ARED, BLOOD_GLUCOSE, BLOOD_PRESSURE, BODY_TEMPERATURE, HEART_RATE, MOOD, SLEEP } from "../config/thresholds";
+import { ARED, BLOOD_GLUCOSE, BLOOD_PRESSURE, BODY_TEMPERATURE, HEART_RATE, MOOD, PVT, RADIATION, SLEEP } from "../config/thresholds";
 import type { MetricId } from "../types/health";
 
 export type ZoneKind = "reference" | "nominal" | "caution" | "critical";
@@ -21,8 +21,47 @@ export interface GaugeTrack {
   reference: [number, number] | null;
 }
 
-export function gaugeTracks(metricId: MetricId, aredTarget: number, hydrationTarget: number): GaugeTrack[] | null {
+/** Slider-adjustable limits; omitted values use the configured defaults. */
+export interface GaugeLimits {
+  radiationLimitMsv?: number;
+  pvtMinMs?: number;
+  pvtMaxMs?: number;
+}
+
+export function gaugeTracks(metricId: MetricId, aredTarget: number, hydrationTarget: number, limits: GaugeLimits = {}): GaugeTrack[] | null {
   switch (metricId) {
+    case "radiation": {
+      const limit = limits.radiationLimitMsv ?? RADIATION.limit.default;
+      const top = Math.round(limit * 1.15);
+      return [
+        {
+          min: 0,
+          max: top,
+          reference: null,
+          zones: [
+            { from: Math.round(limit * RADIATION.cautionFraction), to: limit, kind: "caution" },
+            { from: limit, to: top, kind: "critical" },
+          ],
+        },
+      ];
+    }
+    case "pvt": {
+      const lo = limits.pvtMinMs ?? PVT.range.min;
+      const hi = limits.pvtMaxMs ?? PVT.range.max;
+      const min = Math.max(0, lo - 50);
+      const max = hi + 100;
+      return [
+        {
+          min,
+          max,
+          reference: null,
+          zones: [
+            { from: min, to: lo, kind: "caution" },
+            { from: hi, to: max, kind: "caution" },
+          ],
+        },
+      ];
+    }
     case "heartRate":
       return [
         {
@@ -142,3 +181,38 @@ export function gaugeTracks(metricId: MetricId, aredTarget: number, hydrationTar
   }
 }
 
+/**
+ * The in-range band of a track: the stretch no caution or critical zone covers,
+ * i.e. between the configured caution limits. `null` on a side means no limit
+ * there ("6 or more", "up to 100"). This is the range a crew member is shown;
+ * the narrower `reference` band is a context marker, not the limit.
+ */
+export function nominalBand(t: GaugeTrack): { lo: number | null; hi: number | null } {
+  const zones = [...t.zones].sort((a, b) => a.from - b.from);
+  let cursor = t.min;
+  for (const z of zones) {
+    if (z.from > cursor + 1e-9) break;
+    cursor = Math.max(cursor, z.to);
+  }
+  const next = zones.find((z) => z.from > cursor + 1e-9);
+  const lo = cursor > t.min + 1e-9 ? cursor : null;
+  const hi = next ? next.from : null;
+  return { lo, hi };
+}
+
+const fmtRange = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
+
+/** The in-range band in words: "50–100", "6 or more", "up to 100". */
+export function bandText(t: GaugeTrack): string {
+  const { lo, hi } = nominalBand(t);
+  if (lo !== null && hi !== null) return `${fmtRange(lo)}–${fmtRange(hi)}`;
+  if (lo !== null) return `${fmtRange(lo)} or more`;
+  if (hi !== null) return `up to ${fmtRange(hi)}`;
+  return "any";
+}
+
+/** "50–100 bpm" (or "120–135 / 80–85 mmHg") for one-line rows and screen readers. */
+export function rangeText(tracks: GaugeTrack[] | null, unit: string): string | null {
+  if (!tracks?.length) return null;
+  return tracks.map(bandText).join(" / ") + (unit ? ` ${unit}` : "");
+}

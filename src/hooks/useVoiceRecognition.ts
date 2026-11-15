@@ -1,12 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { parseVoiceCommand, type ParsedVoiceResult } from "../engine/voiceParser";
+import { describeHistory } from "../engine/voiceHistory";
+import { commsAnswer, loggedAnswer, readinessAnswer, readingAnswer, taskMentioned, tasksAnswer, timeAnswer, weatherAnswer } from "../engine/voiceAnswers";
+import { MISSION } from "../config/thresholds";
+import { currentShipTime } from "../utils/dates";
+import { useSpaceWeather } from "./useSpaceWeather";
+import { statusSummary } from "../engine/tuesdayEngine";
+import { METRIC_GUIDANCE } from "../data/metricGuidance";
+import type { MetricId } from "../types/health";
 import { useMissionModel } from "./useMissionModel";
 import { useMissionStore } from "./useMissionState";
 import { useToast } from "./useToast";
-import { useTuesday } from "./useTuesday";
+import { useTuesday, type VoiceSink } from "./useTuesday";
 import { splitVoiceCommands } from "../services/localModel";
 import { transcribeLocalAudio } from "../services/localWhisper";
-import { unlockTuesdaySpeech } from "../services/voiceSynth";
+import { openSpeechStream, unlockTuesdaySpeech } from "../services/voiceSynth";
 import { useTuesdaySpeech } from "./useTuesdaySpeech";
 import type { SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent } from "../types/speech";
 
@@ -14,9 +22,13 @@ export interface VoiceRecognitionState {
   isSupported: boolean;
   provider: "whisper" | "browser" | "unavailable";
   isListening: boolean;
+  /** Conversation mode is on: the microphone reopens after each reply until the user stops it. */
+  isActive: boolean;
   transcript: string;
   interimTranscript: string;
   lastAction: ParsedVoiceResult | null;
+  /** The last thing Tuesday said (or would have said while muted). */
+  lastReply: string;
   audioLevel: number;
   /** Live microphone analyser while local capture runs; null otherwise. Read only, for visualisation. */
   getAnalyser: () => AnalyserNode | null;
@@ -27,14 +39,27 @@ export interface VoiceRecognitionState {
   executeCommand: (text: string) => ParsedVoiceResult;
 }
 
+/** Turn a browser microphone error into a sentence that says what to do. */
+function micErrorMessage(cause: unknown): string {
+  const name = cause instanceof DOMException || cause instanceof Error ? cause.name : "";
+  if (name === "NotAllowedError" || name === "SecurityError")
+    return "The microphone is blocked for this page. Click the microphone or settings icon at the left of the address bar, allow Microphone for localhost, then press the mic button again. On a Mac, also check System Settings > Privacy & Security > Microphone for your browser.";
+  if (name === "NotReadableError" || name === "AbortError")
+    return "Another app is using the microphone (for example a video call). Close it or mute it there, then press the mic button again.";
+  if (name === "NotFoundError" || name === "OverconstrainedError") return "No microphone was found. Connect one, then press the mic button again.";
+  return cause instanceof Error ? cause.message : "Could not start the microphone.";
+}
+
 export function useVoiceRecognition(options?: {
   onCommand?: (result: ParsedVoiceResult) => void;
   onToggleTuesdayMode?: () => void;
 }): VoiceRecognitionState {
   const [isListening, setIsListening] = useState(false);
+  const [isActive, setIsActive] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [lastAction, setLastAction] = useState<ParsedVoiceResult | null>(null);
+  const [lastReply, setLastReply] = useState("");
   const [audioLevel, setAudioLevel] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const { isSpeaking: isTuesdaySpeaking, status: whisperStatus, speak, stop: stopTuesdaySpeech } = useTuesdaySpeech();
@@ -55,14 +80,26 @@ export function useVoiceRecognition(options?: {
   const restartWhisperCaptureRef = useRef<(() => void) | null>(null);
   const processVoiceTranscriptRef = useRef<(text: string) => void>(() => undefined);
   const compoundCommandRef = useRef<(text: string) => void>(() => undefined);
-  const audioChunksRef = useRef<Blob[]>([]);
+  /** True while a capture is being set up, so two clips never record at once. */
+  const startingRef = useRef(false);
   const captureFrameRef = useRef<number | null>(null);
   const discardCaptureRef = useRef(false);
   const transcribingRef = useRef(false);
   const speechGateRef = useRef(isTuesdaySpeaking);
   speechGateRef.current = isTuesdaySpeaking;
 
-  const { day } = useMissionModel();
+  const mission = useMissionModel();
+  const { day } = mission;
+  const missionRef = useRef(mission);
+  missionRef.current = mission;
+  const spaceWeather = useSpaceWeather();
+  const spaceWeatherRef = useRef(spaceWeather);
+  spaceWeatherRef.current = spaceWeather;
+  /** The last reading saved by voice, so "undo that" can remove it. */
+  const lastLoggedIdRef = useRef<string | null>(null);
+  const lastReplyRef = useRef("");
+  /** The last indicator logged by voice, so "no, change it to 110" knows what "it" is. */
+  const lastMetricRef = useRef<MetricId | undefined>(undefined);
   const dayRef = useRef(day);
   dayRef.current = day;
   const store = useMissionStore();
@@ -133,7 +170,8 @@ export function useVoiceRecognition(options?: {
   }, []);
 
   const startWhisperCapture = useCallback(async () => {
-    if (!shouldListenRef.current || speechPauseRef.current || speechGateRef.current || transcribingRef.current || recorderRef.current?.state === "recording") return;
+    if (startingRef.current || !shouldListenRef.current || speechPauseRef.current || speechGateRef.current || transcribingRef.current || recorderRef.current?.state === "recording") return;
+    startingRef.current = true;
     try {
       if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
         throw new Error("This browser does not support local microphone recording.");
@@ -163,16 +201,20 @@ export function useVoiceRecognition(options?: {
         : MediaRecorder.isTypeSupported("audio/mp4") ? "audio/mp4" : "";
       const recorder = new MediaRecorder(mediaStreamRef.current, mimeType ? { mimeType } : undefined);
       recorderRef.current = recorder;
-      audioChunksRef.current = [];
+      // Chunks belong to this recorder only. A shared list let two overlapping
+      // clips swap pieces, so neither had its WebM header and ffmpeg rejected both.
+      const chunks: Blob[] = [];
       discardCaptureRef.current = false;
       const startedAt = performance.now();
       let heardSpeech = false;
       let lastSpeechAt = startedAt;
       const samples = new Uint8Array(analyserRef.current!.fftSize);
 
+      // Keep every chunk: the first one carries the WebM header, and a clip missing it
+      // cannot be decoded. If Tuesday starts speaking mid-clip, drop the whole clip instead.
       recorder.ondataavailable = (event) => {
-        if (event.data.size && !speechGateRef.current) audioChunksRef.current.push(event.data);
-        else if (speechGateRef.current) discardCaptureRef.current = true;
+        if (event.data.size) chunks.push(event.data);
+        if (speechGateRef.current) discardCaptureRef.current = true;
       };
       recorder.onerror = () => setError("Whisper could not record this microphone clip.");
       recorder.onstop = () => {
@@ -181,8 +223,7 @@ export function useVoiceRecognition(options?: {
         captureFrameRef.current = null;
         stopAudioWaveform();
         setIsListening(false);
-        const blob = new Blob(audioChunksRef.current, { type: recorder.mimeType || "audio/webm" });
-        audioChunksRef.current = [];
+        const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
         const discard = discardCaptureRef.current || !shouldListenRef.current || speechPauseRef.current || speechGateRef.current;
         discardCaptureRef.current = false;
         if (discard || blob.size < 900) {
@@ -242,14 +283,23 @@ export function useVoiceRecognition(options?: {
       captureFrameRef.current = requestAnimationFrame(monitor);
     } catch (cause) {
       shouldListenRef.current = false;
+      setIsActive(false);
       setIsListening(false);
-      setError(cause instanceof Error ? cause.message : "Could not start local Whisper microphone capture.");
+      setError(micErrorMessage(cause));
       stopAudioWaveform();
+    } finally {
+      startingRef.current = false;
     }
   }, [startAudioWaveform, stopAudioWaveform]);
   restartWhisperCaptureRef.current = () => { void startWhisperCapture(); };
 
-  const speakResponse = useCallback((text: string) => {
+  const showReply = useCallback((text: string) => {
+    setLastReply(text);
+    lastReplyRef.current = text;
+  }, []);
+
+  /** Stop the microphone while Tuesday talks. Returns a function that undoes it if no speech starts. */
+  const pauseForSpeech = useCallback(() => {
     const resumeListening = shouldListenRef.current;
     const recognition = recognitionRef.current;
     speechSequenceRef.current += 1;
@@ -263,13 +313,31 @@ export function useVoiceRecognition(options?: {
         try { recognition.stop(); } catch { /* Recognition may already be ending. */ }
       }
     }
-
-    if (!speak(text, { rate: 1.06 })) {
+    return () => {
       speechPauseRef.current = false;
       if (resumeListening && whisperModeRef.current) restartWhisperCaptureRef.current?.();
       else if (resumeListening && recognition) scheduleRecognitionRestart(recognition, 300);
-    }
-  }, [scheduleRecognitionRestart, stopAudioWaveform, stopWhisperCapture, speak]);
+    };
+  }, [scheduleRecognitionRestart, stopAudioWaveform, stopWhisperCapture]);
+
+  const speakResponse = useCallback((text: string) => {
+    showReply(text);
+    const undo = pauseForSpeech();
+    if (!speak(text, { rate: 1.06 })) undo();
+  }, [pauseForSpeech, showReply, speak]);
+
+  /** Where Tuesday's spoken answers go: whole sentences, or a reply streamed while the model writes it. */
+  const voiceSinkRef = useRef<VoiceSink>({ speak: () => undefined, open: () => null, show: () => undefined });
+  voiceSinkRef.current = {
+    speak: speakResponse,
+    show: showReply,
+    open: () => {
+      const undo = pauseForSpeech();
+      const stream = openSpeechStream({ rate: 1.06 });
+      if (!stream) undo();
+      return stream;
+    },
+  };
 
   // Gate every recognition source, including speech initiated by Tuesday chat.
   useEffect(() => {
@@ -318,60 +386,129 @@ export function useVoiceRecognition(options?: {
         return routed;
       }
 
-      const parsed = parseVoiceCommand(text, dayRef.current);
+      const parsed = parseVoiceCommand(text, dayRef.current, lastMetricRef.current);
       setLastAction(parsed);
+      // Remember what we're talking about, so "how do I measure it?" or "change it to 37" knows what "it" is.
+      if (parsed.metricId && parsed.metricId !== "symptoms") lastMetricRef.current = parsed.metricId;
 
       if (optionsRef.current?.onCommand) {
         optionsRef.current.onCommand(parsed);
       }
 
-      // 1. Log measurement automatically without astronauts typing or wasting time
+      // The console does the work at once (logging, ticking a task, reading the engines) and
+      // says the result itself: a small local model was found to change or invent health
+      // numbers when rewording them. Open conversation goes to the language model.
+      const reply = (consoleResult?: string) => { void tuesdayRef.current.ask(text, undefined, voiceSinkRef.current, consoleResult); };
+      // After a change to the record, wait one render so the health brief and status include it.
+      const replyAfterSave = (result: () => string) => { window.setTimeout(() => reply(result()), 40); };
+      // Recharge takes the whole screen: show the reply as text only. TuesdayMode turns the microphone off.
+      const quietReply = (consoleResult: string) => {
+        void tuesdayRef.current.ask(text, undefined, { speak: () => undefined, open: () => null, show: voiceSinkRef.current.show }, consoleResult);
+      };
+
       if (parsed.intent === "log_measurement" && parsed.metricId && parsed.value !== undefined) {
-        const recordedAt = new Date().toISOString();
+        const metricId = parsed.metricId;
+        lastMetricRef.current = metricId;
         const res = store.logMeasurement({
-          metricId: parsed.metricId,
+          metricId,
           value: parsed.value,
           missionDay: parsed.targetDay ?? dayRef.current,
-          recordedAt,
+          recordedAt: new Date().toISOString(),
           source: "tuesday",
           notes: "Voice telemetry via Tuesday AI",
         });
-
-        toast({
-          tone: res.persisted ? "success" : "warning",
-          title: "Reading logged",
-          body: `${parsed.displayText}. Saved on this device.`,
+        if (res.measurement) lastLoggedIdRef.current = res.measurement.id;
+        toast({ tone: res.persisted ? "success" : "warning", title: "Reading logged", body: `${parsed.displayText}. Saved on this device.` });
+        replyAfterSave(() => {
+          const today = (parsed.targetDay ?? missionRef.current.day) === missionRef.current.day;
+          const note = res.persisted ? "" : " This browser isn't saving data, so it lasts for this session only.";
+          return `${today ? loggedAnswer(missionRef.current.diagnostics[metricId]) : parsed.speechResponse}${note}`;
         });
-
-        // Speak the confirmation
-        speakResponse(parsed.speechResponse);
+      } else if (parsed.intent === "log_measurement") {
+        // A reading outside what the device accepts: say so and ask for a re-measure. Nothing is logged.
+        reply(parsed.speechResponse);
       } else if (parsed.intent === "toggle_tuesday_mode") {
-        if (optionsRef.current?.onToggleTuesdayMode) {
-          optionsRef.current.onToggleTuesdayMode();
-        }
-        speakResponse(parsed.speechResponse);
+        optionsRef.current?.onToggleTuesdayMode?.();
+        reply(parsed.speechResponse);
       } else if (parsed.intent === "earth_view") {
         tuesdayRef.current.openRecharge("earth");
-        speakResponse(parsed.speechResponse);
+        quietReply(parsed.speechResponse);
       } else if (parsed.intent === "breathe") {
         tuesdayRef.current.openRecharge("breathe");
-        speakResponse(parsed.speechResponse);
+        quietReply(parsed.speechResponse);
       } else if (parsed.intent === "game") {
         tuesdayRef.current.openRecharge("game");
-        speakResponse(parsed.speechResponse);
+        quietReply(parsed.speechResponse);
       } else if (parsed.intent === "medical_officer") {
         tuesdayRef.current.openContact();
-        speakResponse(parsed.speechResponse);
-      } else if (parsed.intent === "status_query" || parsed.intent === "help" || parsed.intent === "greeting") {
-        speakResponse(parsed.speechResponse);
+        reply(parsed.speechResponse);
+      } else if (parsed.intent === "history_query" && parsed.metricId) {
+        const m = missionRef.current;
+        reply(describeHistory(m.days, m.day, parsed.metricId, parsed.days ?? 7, m.diagnostics[parsed.metricId].status));
+      } else if (parsed.intent === "status_query") {
+        reply(statusSummary(tuesdayRef.current.context));
+      } else if (parsed.intent === "symptom_report" && parsed.value !== undefined) {
+        const res = store.logMeasurement({
+          metricId: "symptoms",
+          value: parsed.value,
+          missionDay: parsed.targetDay ?? dayRef.current,
+          recordedAt: new Date().toISOString(),
+          source: "tuesday",
+          notes: "Voice telemetry via Tuesday AI",
+        });
+        if (res.measurement) lastLoggedIdRef.current = res.measurement.id;
+        toast({ tone: res.persisted ? "success" : "warning", title: "Symptoms logged", body: `${parsed.displayText}. Saved on this device.` });
+        replyAfterSave(() => parsed.speechResponse);
+      } else if (parsed.intent === "how_to_measure") {
+        if (!parsed.metricId) reply(parsed.speechResponse);
+        else {
+          const g = METRIC_GUIDANCE[parsed.metricId];
+          reply(`How to measure ${g.shortName.toLowerCase()}: ${g.howToMeasure.map((step, i) => `Step ${i + 1}: ${step}`).join(" ")} Equipment: ${g.deviceRequired}`);
+        }
+      } else if (parsed.intent === "reading_query" && parsed.metricId) {
+        reply(readingAnswer(missionRef.current.diagnostics[parsed.metricId], missionRef.current.day));
+      } else if (parsed.intent === "tasks_query") {
+        const m = missionRef.current;
+        reply(tasksAnswer(m.tasks, m.primaryAction.text));
+      } else if (parsed.intent === "task_done") {
+        const m = missionRef.current;
+        const task = taskMentioned(text, m.tasks);
+        if (!task) reply(`It isn't clear which task was finished. Tasks left today: ${m.tasks.filter((t) => !t.completed).map((t) => t.title).join(", ") || "none"}.`);
+        else if (task.completed) reply(`${task.title} was already marked done today.`);
+        else {
+          const res = store.setTaskCompletion(m.day, task.id, true);
+          replyAfterSave(() => (res.persisted ? `Marked ${task.title} done. ${tasksAnswer(missionRef.current.tasks, missionRef.current.primaryAction.text)}` : `Marked ${task.title} done for this session only; this browser isn't saving data.`));
+        }
+      } else if (parsed.intent === "weather_query") {
+        reply(weatherAnswer(missionRef.current.advisories, spaceWeatherRef.current.mode));
+      } else if (parsed.intent === "comms_query") {
+        reply(commsAnswer(tuesdayRef.current.linkUp, tuesdayRef.current.context.lightMinutes));
+      } else if (parsed.intent === "time_query") {
+        reply(timeAnswer(missionRef.current.day, MISSION.totalDays, currentShipTime()));
+      } else if (parsed.intent === "readiness_query") {
+        reply(readinessAnswer(missionRef.current.readiness));
+      } else if (parsed.intent === "undo") {
+        const id = lastLoggedIdRef.current;
+        if (!id) reply("There is no reading from this conversation to undo. Any entry can be removed in Details.");
+        else {
+          const res = store.deleteMeasurement(id);
+          lastLoggedIdRef.current = null;
+          replyAfterSave(() => (res.ok ? "Removed that reading. The day uses the previous one again." : "That reading was already removed."));
+        }
+      } else if (parsed.intent === "stop") {
+        tuesdayRef.current.stop();
+        stopTuesdaySpeech();
+      } else if (parsed.intent === "repeat") {
+        speakResponse(lastReplyRef.current || "I haven't said anything yet. Ask me how you're doing.");
       } else {
-        // Forward general query to Tuesday companion chat
-        void tuesdayRef.current.ask(text, undefined, speakResponse);
+        // Everything else is conversation: greetings, thanks, open questions, small talk.
+        // Urgent and crisis words still get Tuesday's fixed safety replies inside ask().
+        reply();
       }
 
       return parsed;
     },
-    [store, toast, speakResponse],
+    [store, toast, speakResponse, stopTuesdaySpeech],
   );
   processVoiceTranscriptRef.current = (text) => { executeCommand(text); };
   compoundCommandRef.current = (text) => {
@@ -379,7 +516,7 @@ export function useVoiceRecognition(options?: {
     const model = current.model.state === "ready" ? current.model.choice.chat : null;
     const endpoint = current.data.settings.endpoint;
     if (!model) {
-      void current.ask(text, undefined, speakResponse);
+      void current.ask(text, undefined, voiceSinkRef.current);
       return;
     }
     void splitVoiceCommands({ endpoint, model, transcript: text }).then((commands) => {
@@ -391,9 +528,9 @@ export function useVoiceRecognition(options?: {
         for (const command of validCommands) executeCommand(command.rawText);
         return;
       }
-      void tuesdayRef.current.ask(text, undefined, speakResponse);
+      void tuesdayRef.current.ask(text, undefined, voiceSinkRef.current);
     }).catch(() => {
-      void tuesdayRef.current.ask(text, undefined, speakResponse);
+      void tuesdayRef.current.ask(text, undefined, voiceSinkRef.current);
     });
   };
 
@@ -489,6 +626,7 @@ export function useVoiceRecognition(options?: {
     recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
       if (event.error === "not-allowed" || event.error === "service-not-allowed" || event.error === "audio-capture") {
         shouldListenRef.current = false;
+        setIsActive(false);
         setIsListening(false);
         setError(`Speech error: ${event.error}`);
       } else if (event.error !== "no-speech" && event.error !== "aborted") {
@@ -528,6 +666,7 @@ export function useVoiceRecognition(options?: {
     unlockTuesdaySpeech();
     if ((!recognitionRef.current && !whisperStatus?.ready) || shouldListenRef.current || speechGateRef.current) return;
     shouldListenRef.current = true;
+    setIsActive(true);
     speechPauseRef.current = false;
     setError(null);
     if (whisperStatus?.ready) {
@@ -545,6 +684,7 @@ export function useVoiceRecognition(options?: {
 
   const stopListening = useCallback(() => {
     shouldListenRef.current = false;
+    setIsActive(false);
     speechPauseRef.current = false;
     speechSequenceRef.current += 1;
     setIsListening(false);
@@ -589,9 +729,11 @@ export function useVoiceRecognition(options?: {
     isSupported,
     provider: whisperStatus?.ready ? "whisper" : browserSpeechSupported ? "browser" : "unavailable",
     isListening,
+    isActive,
     transcript,
     interimTranscript,
     lastAction,
+    lastReply,
     audioLevel,
     getAnalyser,
     error,

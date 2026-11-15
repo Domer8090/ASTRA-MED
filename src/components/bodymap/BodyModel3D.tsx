@@ -117,7 +117,9 @@ export function BodyModel3D({ systems, selected, onSelect, onControlsReady }: Pr
     };
 
     // One material per status, shared by every mesh of that status. The selected
-    // system is drawn brighter and on top so it reads through the skin.
+    // system keeps its full status colour with shading and a glow of the same hue,
+    // drawn on top so it reads through the skin; the others are muted toward grey.
+    // (An unlit flat material washed the selection out to near white.)
     const statusMaterials = new Map<string, THREE.Material>();
     const statusMaterial = (status: keyof typeof STATUS_COLOR, active: boolean) => {
       const key = `${status}:${active}`;
@@ -125,8 +127,8 @@ export function BodyModel3D({ systems, selected, onSelect, onControlsReady }: Pr
       if (!material) {
         const color = new THREE.Color(STATUS_COLOR[status]);
         material = active
-          ? new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide, depthTest: false, depthWrite: false })
-          : new THREE.MeshStandardMaterial({ color: color.clone().lerp(new THREE.Color(0x9aa6b2), 0.35), roughness: 0.75, metalness: 0 });
+          ? new THREE.MeshStandardMaterial({ color, emissive: color.clone().multiplyScalar(0.45), roughness: 0.55, metalness: 0, side: THREE.DoubleSide, depthTest: false, depthWrite: false })
+          : new THREE.MeshStandardMaterial({ color: color.clone().lerp(new THREE.Color(0x5b6675), 0.6), roughness: 0.85, metalness: 0, transparent: true, opacity: 0.55 });
         statusMaterials.set(key, material);
       }
       return material;
@@ -279,7 +281,7 @@ export function BodyModel3D({ systems, selected, onSelect, onControlsReady }: Pr
           >
             <span
               aria-hidden="true"
-              className={`block h-3 w-3 rounded-full border border-space ${isSelected ? "outline outline-2 outline-offset-2 outline-ink" : ""}`}
+              className={`block rounded-full border border-space ${isSelected ? "h-4 w-4 outline outline-2 outline-offset-2 outline-cyan" : "h-3 w-3"}`}
               style={{ backgroundColor: statusColor }}
             />
           </button>

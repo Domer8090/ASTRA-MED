@@ -11,7 +11,11 @@ export interface Landmark {
 }
 
 export interface HandPose {
-  /** Index fingertip in screen space, 0–1, mirrored so moving right moves right. */
+  /**
+   * Pointer in screen space, 0–1, mirrored so moving right moves right. The
+   * midpoint of thumb tip and index tip: it stays put while pinching, so a pinch
+   * lands where you were pointing instead of jumping.
+   */
   cursor: { x: number; y: number };
   /** Thumb and index tips touching. Uses hysteresis through `wasPinching`. */
   pinch: boolean;
@@ -19,14 +23,18 @@ export interface HandPose {
   extended: number;
   open: boolean;
   fist: boolean;
+  /** How open the hand is, 0 (fist) to 1 (fully open). Smooth, for breathing and gauges. */
+  openness: number;
   /** Wrist to middle-finger base, in image widths. Grows as the hand nears the camera. */
   palmSize: number;
 }
 
-const dist = (a: Landmark, b: Landmark) => Math.hypot(a.x - b.x, a.y - b.y);
+/** 3D distance when depth is available (MediaPipe gives z in image-width units), else 2D. */
+const dist = (a: Landmark, b: Landmark) => Math.hypot(a.x - b.x, a.y - b.y, (a.z ?? 0) - (b.z ?? 0));
 
-export const PINCH_ON = 0.32;
-export const PINCH_OFF = 0.45;
+/** Pinch starts below this thumb–index gap (in palm lengths) and ends above PINCH_OFF. Forgiving, so a light touch counts. */
+export const PINCH_ON = 0.38;
+export const PINCH_OFF = 0.5;
 
 export function readHandPose(lm: readonly Landmark[], wasPinching = false): HandPose | null {
   if (lm.length < 21) return null;
@@ -36,30 +44,44 @@ export function readHandPose(lm: readonly Landmark[], wasPinching = false): Hand
   const pinchRatio = dist(lm[4]!, lm[8]!) / palmSize;
   const pinch = wasPinching ? pinchRatio < PINCH_OFF : pinchRatio < PINCH_ON;
   let extended = 0;
+  let reach = 0;
   for (const [tip, joint] of [
     [8, 6],
     [12, 10],
     [16, 14],
     [20, 18],
   ] as const) {
-    // A finger is extended when its tip is further from the wrist than its middle joint.
-    if (dist(lm[tip]!, wrist) > dist(lm[joint]!, wrist) * 1.1) extended++;
+    const tipReach = dist(lm[tip]!, wrist);
+    // Extended: the tip is clearly past its middle joint and well beyond the palm.
+    // Distances include depth, so a hand turned toward the camera still reads correctly.
+    if (tipReach > dist(lm[joint]!, wrist) * 1.08 && tipReach > palmSize * 1.3) extended++;
+    // Fingertip reach in palm lengths: about 0.9 curled, about 1.9 straight.
+    reach += Math.min(1, Math.max(0, (tipReach / palmSize - 1) / 0.8));
   }
-  const tip = lm[8]!;
+  const openness = reach / 4;
+  const thumb = lm[4]!;
+  const index = lm[8]!;
   return {
-    cursor: { x: 1 - tip.x, y: tip.y },
+    cursor: { x: 1 - (thumb.x + index.x) / 2, y: (thumb.y + index.y) / 2 },
     pinch,
     extended,
-    open: extended >= 4 && !pinch,
+    open: extended >= 3 && !pinch,
     fist: extended === 0,
+    openness,
     palmSize,
   };
 }
 
-/** Exponential smoothing for a jittery cursor. `alpha` near 1 follows quickly. */
-export function smoothPoint(prev: { x: number; y: number } | null, next: { x: number; y: number }, alpha = 0.45): { x: number; y: number } {
+/**
+ * Adaptive smoothing for a jittery cursor: small movements are smoothed hard so
+ * a resting hand holds still, fast movements follow almost at once so it never
+ * feels laggy. Pass `alpha` for a fixed amount instead.
+ */
+export function smoothPoint(prev: { x: number; y: number } | null, next: { x: number; y: number }, alpha?: number): { x: number; y: number } {
   if (!prev) return next;
-  return { x: prev.x + (next.x - prev.x) * alpha, y: prev.y + (next.y - prev.y) * alpha };
+  const speed = Math.hypot(next.x - prev.x, next.y - prev.y);
+  const a = alpha ?? Math.min(0.85, 0.2 + speed * 9);
+  return { x: prev.x + (next.x - prev.x) * a, y: prev.y + (next.y - prev.y) * a };
 }
 
 /** Bones between the 21 hand landmarks, for drawing the hand skeleton. */

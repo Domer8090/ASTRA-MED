@@ -134,7 +134,13 @@ async function transcribe(req, res, origin) {
     const source = path.join(workDir, `capture.${extension}`);
     const wav = path.join(workDir, "capture.wav");
     await writeFile(source, audio);
-    await execFileAsync(FFMPEG_BIN, ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", source, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav], { timeout: 15000, maxBuffer: 256 * 1024 });
+    try {
+      await execFileAsync(FFMPEG_BIN, ["-nostdin", "-hide_banner", "-loglevel", "error", "-y", "-i", source, "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le", wav], { timeout: 15000, maxBuffer: 256 * 1024 });
+    } catch (decodeError) {
+      const stderr = decodeError && typeof decodeError === "object" && "stderr" in decodeError ? String(decodeError.stderr).trim() : String(decodeError);
+      console.warn(`Could not decode a ${mime} clip of ${audio.length} bytes (first bytes ${audio.subarray(0, 4).toString("hex")}): ${stderr.slice(0, 400)}`);
+      throw new Error("That audio clip could not be read. Please say it again.");
+    }
     const result = await execFileAsync(WHISPER_BIN, ["--no-prints", "--no-timestamps", "--language", "en", "--threads", String(THREADS), "--model", WHISPER_MODEL, "--file", wav], { timeout: 45000, maxBuffer: 1024 * 1024 });
     const transcript = result.stdout.trim().replace(/^\[[^\]]+\]\s*/gm, "").trim();
     return send(res, 200, { transcript }, origin);

@@ -26,7 +26,7 @@ export const Sparkline = memo(function Sparkline({ values, color, className = "h
   const last = values[lastIdx];
   return (
     <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" className={className} aria-hidden="true">
-      <path d={d} fill="none" stroke="#647A93" strokeWidth="1.25" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke="#7D93AB" strokeWidth="1.25" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
       {last !== null && last !== undefined ? (
         <circle cx={lastIdx * step} cy={h - 2 - ((last - min) / span) * (h - 4)} r="2.2" fill={color} vectorEffect="non-scaling-stroke" />
       ) : null}

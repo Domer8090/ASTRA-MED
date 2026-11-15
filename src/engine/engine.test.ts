@@ -89,11 +89,33 @@ describe("diagnostic rules", () => {
     expect(evaluateMetric(input("nominal", missed), "aredMinutes", 42).status).toBe("CRITICAL");
   });
 
-  it("radiation: unusual daily increase is CAUTION, cumulative alone never CRITICAL", () => {
+  it("radiation: unusual daily increase is CAUTION; the default dose limit is not reached in the demo", () => {
     const sep = evaluateMetric(input("sep"), "radiation", 131);
     expect(sep.status).toBe("CAUTION");
     expect(sep.triggeredRules[0]?.ruleId).toBe("rad-unusual-daily");
     expect(evaluateMetric(input("nominal"), "radiation", 180).status).toBe("NOMINAL");
+  });
+
+  it("radiation: CAUTION near the adjustable dose limit, CRITICAL at it", () => {
+    const i = input("nominal");
+    const cumulative = Number(i.days[179]?.readings.radiation?.value);
+    const near = evaluateMetric({ ...i, settings: { ...i.settings, radiationLimitMsv: Math.ceil(cumulative / 0.85) } }, "radiation", 180);
+    expect(near.status).toBe("CAUTION");
+    expect(near.triggeredRules[0]?.ruleId).toBe("rad-near-limit");
+    const over = evaluateMetric({ ...i, settings: { ...i.settings, radiationLimitMsv: 50 } }, "radiation", 180);
+    expect(over.status).toBe("CRITICAL");
+    expect(over.triggeredRules[0]?.ruleId).toBe("rad-limit");
+  });
+
+  it("PVT: outside the adjustable 200–300 ms band is CAUTION", () => {
+    const i = input("nominal");
+    expect(evaluateMetric(input("nominal", [m("pvt", 42, 250)]), "pvt", 42).status).toBe("NOMINAL");
+    const slow = evaluateMetric(input("nominal", [m("pvt", 42, 320)]), "pvt", 42);
+    expect(slow.status).toBe("CAUTION");
+    expect(slow.triggeredRules[0]?.ruleId).toBe("pvt-above-range");
+    expect(evaluateMetric(input("nominal", [m("pvt", 42, 180)]), "pvt", 42).triggeredRules[0]?.ruleId).toBe("pvt-below-range");
+    const widened = evaluateMetric({ ...input("nominal", [m("pvt", 42, 320)]), settings: { ...i.settings, pvtMaxMs: 350 } }, "pvt", 42);
+    expect(widened.triggeredRules.some((r) => r.ruleId === "pvt-above-range")).toBe(false);
   });
 
   it("flags stale and missing measurements", () => {

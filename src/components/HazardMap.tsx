@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Globe2, Orbit, Radiation, RadioTower, Users, Wind, type LucideIcon } from "lucide-react";
 import { HRP_HAZARDS_URL, type HazardId } from "../data/spaceflightHazards";
 import { hazardMap, type HazardAction } from "../engine/hazardMap";
-import { earthMarsLightMinutes } from "../engine/lightTime";
+import { missionSignalMinutes } from "../utils/dates";
 import { useConsoleFocus } from "./console/useConsoleFocus";
 import { useMissionModel } from "../hooks/useMissionModel";
 import { useTuesday } from "../hooks/useTuesday";
@@ -23,7 +23,7 @@ const ICONS: Record<HazardId, LucideIcon> = {
 /** The five hazards of human spaceflight, each tied to what ASTRA-MED watches today. */
 export function HazardMap() {
   const m = useMissionModel();
-  const { linkUp, data, setOpen, openContact } = useTuesday();
+  const { linkUp, data, setTuesdayMode, openContact } = useTuesday();
   const { openGuidance } = useUiActions();
   const { focusSystem } = useConsoleFocus();
   const week = wellbeingSummary(data.activity, m.day);
@@ -36,28 +36,32 @@ export function HazardMap() {
         advisories: m.advisories,
         drift: m.drift,
         linkUp,
-        signalDelayMinutes: earthMarsLightMinutes(new Date()),
+        signalDelayMinutes: missionSignalMinutes(m.day),
         queuedMessages: data.outbox.length,
         checkInsThisWeek: week.checkIns,
         rechargeMinutesThisWeek: week.rechargeMinutes,
       }),
-    [m.systems, m.diagnostics, m.advisories, m.drift, linkUp, data.outbox.length, week.checkIns, week.rechargeMinutes],
+    [m.day, m.systems, m.diagnostics, m.advisories, m.drift, linkUp, data.outbox.length, week.checkIns, week.rechargeMinutes],
   );
 
   const run = (a: HazardAction) => {
     if (a.kind === "weather") scrollToSection("weather");
-    else if (a.kind === "tuesday") setOpen(true);
-    else if (a.kind === "contact") openContact({ report: "" });
+    else if (a.kind === "tuesday") {
+      // Open the Tuesday screen itself, not the side drawer.
+      setTuesdayMode(true);
+      window.scrollTo({ top: 0 });
+    } else if (a.kind === "contact") openContact({ report: "" });
     else if (a.kind === "system") {
+      // Stay in Details: select the system and scroll up to the body map.
       focusSystem(a.id);
-      scrollToSection("overview");
+      scrollToSection("details");
     } else openGuidance({ kind: "metric", id: a.metricId });
   };
 
   return (
     <section id="hazards" aria-labelledby="hazards-title" className="panel scroll-mt-[var(--sticky-offset)] p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="hazards-title" className="flex items-center gap-1 font-cond text-lg font-bold text-ink">
+        <h2 id="hazards-title" className="flex items-center gap-1 text-xl font-bold text-ink">
           Five hazards of human spaceflight
           <InfoTip label="Five hazards">
             What ASTRA-MED watches for each NASA Human Research Program hazard on day {m.day}. Statuses come from the same engine as the console; the mapping is ASTRA-MED&apos;s own.
@@ -86,7 +90,7 @@ export function HazardMap() {
                   <li key={f}>{f}</li>
                 ))}
               </ul>
-              <button type="button" className="btn btn-secondary mt-auto min-h-[32px] self-start px-2.5 text-xs" onClick={() => run(c.action)}>
+              <button type="button" className="btn btn-secondary mt-auto min-h-[44px] self-start px-3 text-sm" onClick={() => run(c.action)}>
                 {c.id === "isolation" ? <Globe2 aria-hidden="true" className="h-3.5 w-3.5 text-tue" /> : null}
                 {c.actionLabel}
               </button>

@@ -5,7 +5,7 @@
  * subscribers. Actions return whether the change was persisted so the UI only
  * reports success after the local state change has completed.
  */
-import { ARED, HYDRATION, MISSION } from "../config/thresholds";
+import { ARED, HYDRATION, MISSION, PVT, RADIATION } from "../config/thresholds";
 import { SCENARIOS } from "../data/scenarios";
 import { getCountermeasureTasks } from "../data/countermeasureTasks";
 import type { CompletionLog } from "../engine/readinessEngine";
@@ -32,6 +32,9 @@ export const DEFAULT_SETTINGS: MissionSettings = {
   selectedDay: MISSION.defaultDay,
   aredTargetMinutes: ARED.defaultTargetMinutes,
   hydrationTargetLiters: HYDRATION.defaultTargetLiters,
+  radiationLimitMsv: RADIATION.limit.default,
+  pvtMinMs: PVT.range.min,
+  pvtMaxMs: PVT.range.max,
   trendWindow: 30,
   trendTab: "heartRate",
 };
@@ -163,6 +166,13 @@ export function createMissionStore(storage: StorageService = createStorageServic
 
     setTrendTab(trendTab: TrendTabId): void {
       commit({ settings: { ...state.settings, trendTab } });
+    },
+
+    /** Slider limits from the Thresholds screen. Values are clamped to their slider bounds. */
+    updateLimits(patch: Partial<Pick<MissionSettings, "aredTargetMinutes" | "hydrationTargetLiters" | "radiationLimitMsv" | "pvtMinMs" | "pvtMaxMs">>): ActionResult {
+      const next = sanitizeSettings({ ...state.settings, ...patch }, DEFAULT_SETTINGS) ?? state.settings;
+      const persisted = commit({ settings: next });
+      return saved(persisted, "Limits saved.");
     },
 
     updatePlanTargets(aredTargetMinutes: number, hydrationTargetLiters: number): ActionResult {

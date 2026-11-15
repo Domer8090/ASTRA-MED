@@ -7,6 +7,32 @@
  */
 
 export const DEFAULT_ENDPOINT = "http://localhost:11434";
+/** No first word from the model within this time: answer with onboard rules instead. */
+export const FIRST_TOKEN_TIMEOUT_MS = 20_000;
+/** Tuesday's answers are short; capping length keeps them fast on a busy machine. */
+const MAX_REPLY_TOKENS = 220;
+
+/** Remove a reasoning block, finished or still streaming. */
+function stripThinking(text: string): string {
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/<think>[\s\S]*$/i, "").trimStart();
+}
+
+/** Append Qwen's /no_think switch to the last user message. */
+function noThink<T extends { role: string; content: string }>(messages: readonly T[]): T[] {
+  const last = messages.map((m) => m.role).lastIndexOf("user");
+  return messages.map((m, i) => (i === last && !m.content.includes("/no_think") ? { ...m, content: `${m.content} /no_think` } : m));
+}
+
+/** Hard limit for a whole model answer. */
+export const ANSWER_TIMEOUT_MS = 90_000;
+/** After a slow or failed answer, skip the model for this long and answer from onboard rules at once. */
+const SLOW_BACKOFF_MS = 2 * 60_000;
+let slowUntil = 0;
+
+/** True while the local model recently failed to answer in time. */
+export function modelRecentlySlow(now = Date.now()): boolean {
+  return now < slowUntil;
+}
 
 export interface ModelChoice {
   /** Fast conversational model, Qwen3 4B preferred for voice routing. */
@@ -47,6 +73,29 @@ function endpointUrl(endpoint: string, path: string): string | null {
 }
 
 /** Installed model names, or null when no local runtime answers. */
+/**
+ * Load a model into memory ahead of the first question, so it doesn't wait for a
+ * cold start. Sends no prompt and no health data: an empty request just loads it.
+ */
+export function warmUpModel(endpoint: string, model: string, prefix: ChatMessage[] = []): void {
+  const url = endpointUrl(endpoint, "/api/chat");
+  if (!url) return;
+  // With a prefix (Tuesday's fixed instructions), Ollama also caches it, so a later
+  // question reads fewer new tokens. One output token, then stop.
+  void fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model,
+      messages: prefix,
+      stream: false,
+      keep_alive: "30m",
+      ...(isThinkingModel(model) ? { think: false } : {}),
+      options: { num_ctx: 4096, num_predict: 1 },
+    }),
+  }).catch(() => undefined);
+}
+
 export async function listLocalModels(endpoint: string, signal?: AbortSignal): Promise<string[] | null> {
   const url = endpointUrl(endpoint, "/api/tags");
   if (!url) return null;
@@ -70,7 +119,19 @@ export function chooseModels(installed: readonly string[], preferred: Partial<Mo
   const has = (name: string | null | undefined) => (name && installed.includes(name) ? name : null);
   const find = (re: RegExp) => installed.find((n) => re.test(n)) ?? null;
   const medical = has(preferred.medical) ?? find(/medgemma/i);
-  const chat = has(preferred.chat) ?? find(/qwen3/i) ?? find(/qwen/i) ?? installed.find((n) => !EMBEDDING.test(n) && n !== medical) ?? medical;
+  // Small models without a hidden thinking pass answer fastest. Some Ollama builds cannot
+  // switch Qwen3's thinking off, which made Tuesday take 20+ seconds, so it comes last.
+  const chat =
+    has(preferred.chat) ??
+    find(/llama3\.2/i) ??
+    find(/qwen2\.5/i) ??
+    find(/gemma3/i) ??
+    find(/phi/i) ??
+    find(/llama3/i) ??
+    find(/qwen3/i) ??
+    find(/qwen/i) ??
+    installed.find((n) => !EMBEDDING.test(n) && n !== medical) ??
+    medical;
   return { chat, medical };
 }
 
@@ -88,24 +149,41 @@ export async function streamChat(args: {
   messages: ChatMessage[];
   signal?: AbortSignal;
   onToken?: (textSoFar: string) => void;
+  /** Override the first-word time limit (voice uses a shorter one). */
+  firstTokenTimeoutMs?: number;
   format?: "json" | JsonObjectSchema;
   temperature?: number;
 }): Promise<string> {
   const url = endpointUrl(args.endpoint, "/api/chat");
   if (!url) return "ERROR: The model endpoint must be on this device (localhost).";
+  // A stuck model must never leave Tuesday silent: give up if no words arrive
+  // in time, or if the whole answer takes too long, and let the caller fall back.
+  const thinking = isThinkingModel(args.model);
+  const local = new AbortController();
+  let timedOut = false;
+  const giveUp = () => {
+    timedOut = true;
+    local.abort();
+  };
+  args.signal?.addEventListener("abort", () => local.abort(), { once: true });
+  let firstToken: ReturnType<typeof setTimeout> | undefined = setTimeout(giveUp, args.firstTokenTimeoutMs ?? FIRST_TOKEN_TIMEOUT_MS);
+  const overall = setTimeout(giveUp, ANSWER_TIMEOUT_MS);
   try {
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      signal: args.signal ?? null,
+      signal: local.signal,
       body: JSON.stringify({
         model: args.model,
-        messages: args.messages,
+        messages: thinking ? noThink(args.messages) : args.messages,
         stream: true,
         // Qwen3 answers faster without its thinking pass; Tuesday wants short replies.
-        ...(isThinkingModel(args.model) ? { think: false } : {}),
+        // Some Ollama builds ignore `think`, so the prompt also carries /no_think.
+        ...(thinking ? { think: false } : {}),
         ...(args.format ? { format: args.format } : {}),
-        options: { temperature: args.temperature ?? 0.3, num_ctx: 4096 },
+        // Stay loaded between questions so a reply never waits for a reload.
+        keep_alive: "30m",
+        options: { temperature: args.temperature ?? 0.3, num_ctx: 4096, num_predict: args.format ? 1024 : MAX_REPLY_TOKENS },
       }),
     });
     if (!res.ok || !res.body) return `ERROR: The local model answered HTTP ${res.status}.`;
@@ -125,18 +203,30 @@ export async function streamChat(args: {
           const chunk = JSON.parse(line) as { message?: { content?: unknown }; error?: unknown };
           if (typeof chunk.error === "string") return `ERROR: ${chunk.error}`;
           if (typeof chunk.message?.content === "string") {
+            if (firstToken && chunk.message.content) {
+              clearTimeout(firstToken);
+              firstToken = undefined;
+            }
             text += chunk.message.content;
-            args.onToken?.(text);
+            args.onToken?.(stripThinking(text));
           }
         } catch {
           // Ignore a malformed line; the stream continues.
         }
       }
     }
-    return text;
+    return stripThinking(text);
   } catch (e) {
+    if (timedOut) {
+      slowUntil = Date.now() + SLOW_BACKOFF_MS;
+      return "ERROR: The local model took too long to answer.";
+    }
     if (e instanceof DOMException && e.name === "AbortError") return "ERROR: Stopped.";
+    slowUntil = Date.now() + SLOW_BACKOFF_MS;
     return "ERROR: The local model is not reachable.";
+  } finally {
+    if (firstToken) clearTimeout(firstToken);
+    clearTimeout(overall);
   }
 }
 

@@ -153,11 +153,19 @@ var AstraCoreBundle = (function(exports) {
 		trailingWindowDays: 14,
 		ruleProvenance: "astra-assumption",
 		/**
-		* Mission exposure budget in mSv. Deliberately null: exposure limits depend on
-		* mission, dose rate, particle type and approved radiation protection limits.
-		* While null, ASTRA-MED never raises CRITICAL from a cumulative value.
+		* Cumulative mission dose limit in mSv, adjustable with a slider from 50 to
+		* 2000 mSv. At or above it is CRITICAL; from `cautionFraction` of it is
+		* CAUTION. Default 600 mSv, the size of NASA's published career limit
+		* (NASA-STD-3001), used here only as a demo default, not as a flight rule.
 		*/
-		missionExposureBudgetMsv: null,
+		limit: {
+			min: 50,
+			max: 2e3,
+			step: 10,
+			default: 600
+		},
+		cautionFraction: .8,
+		limitProvenance: "astra-assumption",
 		/** Daily dose entry bounds for a cumulative dosimeter reading delta. */
 		entry: {
 			min: 0,
@@ -167,6 +175,19 @@ var AstraCoreBundle = (function(exports) {
 	};
 	var PVT = {
 		unit: "ms",
+		/**
+		* In-range band for mean reaction time. Outside it is CAUTION. Each end is
+		* adjustable with a slider within `sliderBounds`.
+		*/
+		range: {
+			min: 200,
+			max: 300
+		},
+		sliderBounds: {
+			min: 150,
+			max: 500,
+			step: 5
+		},
 		/** Baseline is the crew member's median over mission days 1–14. */
 		baselineDays: 14,
 		/** CAUTION when mean reaction time exceeds baseline by this fraction on consecutive checks. */
@@ -449,7 +470,7 @@ var AstraCoreBundle = (function(exports) {
 			{
 				id: "ared-session",
 				systems: ["musculoskeletal", "cardiovascular"],
-				title: "ARED resistive exercise",
+				title: "Strength exercise (ARED)",
 				description: "Complete only the assigned session in today's exercise plan.",
 				category: "exercise",
 				targetLabel: `Demo target ${aredTargetMinutes} min (mission plan configurable)`,
@@ -2047,6 +2068,70 @@ var AstraCoreBundle = (function(exports) {
 			}
 		]
 	};
+	// src/engine/lightTime.ts
+	var EARTH = {
+		a: [1.00000261, 562e-8],
+		e: [.01671123, -4392e-8],
+		i: [-1531e-8, -.01294668],
+		L: [100.46457166, 35999.37244981],
+		peri: [102.93768193, .32327364],
+		node: [0, 0]
+	};
+	var MARS = {
+		a: [1.52371034, 1847e-8],
+		e: [.0933941, 7882e-8],
+		i: [1.84969142, -.00813131],
+		L: [-4.55343205, 19140.30268499],
+		peri: [-23.94362959, .44441088],
+		node: [49.55953891, -.29257343]
+	};
+	var AU_KM = 149597870.7;
+	var C_KM_S = 299792.458;
+	var RAD$1 = Math.PI / 180;
+	/** Heliocentric ecliptic position (J2000) in AU. */
+	function heliocentric(el, date) {
+		const T = (date.getTime() / 864e5 + 2440587.5 - 2451545) / 36525;
+		const v = (p) => p[0] + p[1] * T;
+		const a = v(el.a);
+		const e = v(el.e);
+		const i = v(el.i) * RAD$1;
+		const L = v(el.L);
+		const peri = v(el.peri);
+		const node = v(el.node);
+		const w = (peri - node) * RAD$1;
+		const O = node * RAD$1;
+		let M = ((L - peri) % 360 + 540) % 360 - 180;
+		M *= RAD$1;
+		let E = M + e * Math.sin(M);
+		for (let k = 0; k < 8; k++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
+		const xp = a * (Math.cos(E) - e);
+		const yp = a * Math.sqrt(1 - e * e) * Math.sin(E);
+		return [
+			(Math.cos(w) * Math.cos(O) - Math.sin(w) * Math.sin(O) * Math.cos(i)) * xp + (-Math.sin(w) * Math.cos(O) - Math.cos(w) * Math.sin(O) * Math.cos(i)) * yp,
+			(Math.cos(w) * Math.sin(O) + Math.sin(w) * Math.cos(O) * Math.cos(i)) * xp + (-Math.sin(w) * Math.sin(O) + Math.cos(w) * Math.cos(O) * Math.cos(i)) * yp,
+			Math.sin(w) * Math.sin(i) * xp + Math.cos(w) * Math.sin(i) * yp
+		];
+	}
+	function earthMarsDistanceAu(date) {
+		const [x1, y1, z1] = heliocentric(EARTH, date);
+		const [x2, y2, z2] = heliocentric(MARS, date);
+		return Math.hypot(x2 - x1, y2 - y1, z2 - z1);
+	}
+	/** One-way radio signal time between Earth and Mars, in minutes. */
+	function earthMarsLightMinutes(date) {
+		return earthMarsDistanceAu(date) * AU_KM / C_KM_S / 60;
+	}
+	/**
+	* One-way radio time between the demo ship and Earth on a mission day, in
+	* minutes. The ship leaves Earth on day 1 and reaches Mars on the last day;
+	* it is placed at a growing share of the Earth–Mars distance on that date
+	* (eased, so it speeds up after launch and slows before arrival). An
+	* illustration of a transit, not a trajectory.
+	*/
+	function shipEarthLightMinutes(missionDay, totalDays, at) {
+		const f = Math.min(1, Math.max(0, (missionDay - 1) / Math.max(1, totalDays - 1)));
+		return (.5 - Math.cos(Math.PI * f) / 2) * earthMarsLightMinutes(at);
+	}
 	// src/utils/dates.ts
 	var DAY_MS = 864e5;
 	var EPOCH_MS = Date.parse(MISSION.epochUtc);
@@ -2077,6 +2162,12 @@ var AstraCoreBundle = (function(exports) {
 	function padDay(day) {
 		return String(day).padStart(3, "0");
 	}
+	new Intl.DateTimeFormat("en-GB", {
+		day: "numeric",
+		month: "short",
+		year: "numeric",
+		timeZone: "UTC"
+	});
 	new Intl.DateTimeFormat(void 0, {
 		year: "numeric",
 		month: "short",
@@ -2096,6 +2187,10 @@ var AstraCoreBundle = (function(exports) {
 		day: "2-digit"
 	});
 	new Intl.RelativeTimeFormat(void 0, { numeric: "auto" });
+	/** Ship-to-Earth one-way signal time on a mission day of the demo transit, in minutes. */
+	function missionSignalMinutes(missionDay) {
+		return shipEarthLightMinutes(missionDay, MISSION.totalDays, new Date(missionDayToIso(missionDay, 720)));
+	}
 	// src/data/scenarios.ts
 	/** Events shared by every scenario: small, controlled anomalies in the base mission. */
 	var BASE_EVENTS = [
@@ -2547,6 +2642,18 @@ var AstraCoreBundle = (function(exports) {
 		}
 		return out;
 	}
+	/** PVT band: both ends inside the slider bounds and at least 10 ms apart, else the defaults. */
+	function pvtBand(lo, hi, defaults) {
+		const ok = (v) => isFiniteNumber(v) && v >= PVT.sliderBounds.min && v <= PVT.sliderBounds.max;
+		if (ok(lo) && ok(hi) && hi - lo >= 10) return {
+			pvtMinMs: Math.round(lo),
+			pvtMaxMs: Math.round(hi)
+		};
+		return {
+			pvtMinMs: defaults.pvtMinMs,
+			pvtMaxMs: defaults.pvtMaxMs
+		};
+	}
 	function sanitizeSettings(x, defaults) {
 		if (!isRecord$1(x)) return null;
 		return {
@@ -2554,6 +2661,8 @@ var AstraCoreBundle = (function(exports) {
 			selectedDay: isMissionDay(x.selectedDay) ? x.selectedDay : defaults.selectedDay,
 			aredTargetMinutes: Number.isInteger(x.aredTargetMinutes) && x.aredTargetMinutes >= 10 && x.aredTargetMinutes <= 180 ? x.aredTargetMinutes : defaults.aredTargetMinutes,
 			hydrationTargetLiters: isFiniteNumber(x.hydrationTargetLiters) && x.hydrationTargetLiters >= .5 && x.hydrationTargetLiters <= 5 ? Math.round(x.hydrationTargetLiters * 10) / 10 : defaults.hydrationTargetLiters,
+			...pvtBand(x.pvtMinMs, x.pvtMaxMs, defaults),
+			radiationLimitMsv: isFiniteNumber(x.radiationLimitMsv) && x.radiationLimitMsv >= RADIATION.limit.min && x.radiationLimitMsv <= RADIATION.limit.max ? Math.round(x.radiationLimitMsv) : defaults.radiationLimitMsv,
 			trendWindow: TREND_WINDOWS.includes(x.trendWindow) ? x.trendWindow : defaults.trendWindow,
 			trendTab: TREND_TABS.includes(x.trendTab) ? x.trendTab : defaults.trendTab
 		};
@@ -2983,8 +3092,8 @@ var AstraCoreBundle = (function(exports) {
 		},
 		aredMinutes: {
 			metricId: "aredMinutes",
-			name: "ARED resistive exercise",
-			shortName: "ARED",
+			name: "Strength exercise (ARED)",
+			shortName: "Strength exercise",
 			unit: "min",
 			whatItMeasures: "Minutes of resistive exercise completed on the Advanced Resistive Exercise Device (ARED) today.",
 			whyItMatters: "Reduced mechanical loading contributes to bone and muscle loss. Resistive exercise is a key countermeasure. Minutes show adherence; they do not measure bone density.",
@@ -3011,7 +3120,7 @@ var AstraCoreBundle = (function(exports) {
 		radiation: {
 			metricId: "radiation",
 			name: "Cumulative radiation dose",
-			shortName: "Radiation",
+			shortName: "Radiation dose",
 			unit: "mSv",
 			whatItMeasures: "Your personal dosimeter's cumulative dose for the mission, and the change since the previous day.",
 			whyItMatters: "Exposure accumulates over the mission. Only a dosimeter or a validated mission model gives a personal dose value.",
@@ -3037,7 +3146,7 @@ var AstraCoreBundle = (function(exports) {
 		pvt: {
 			metricId: "pvt",
 			name: "PVT reaction time",
-			shortName: "PVT",
+			shortName: "Reaction test",
 			unit: "ms",
 			whatItMeasures: "Mean reaction time on the Psychomotor Vigilance Test, a short task where you respond to a light or signal.",
 			whyItMatters: "Slower reaction time can reveal fatigue from sleep loss or workload before you notice it.",
@@ -3220,7 +3329,7 @@ var AstraCoreBundle = (function(exports) {
 			url: "https://www.asc-csa.gc.ca/eng/iss/science/why-do-we-conduct-science-experiments-in-space.asp",
 			publisher: "Canadian Space Agency (CSA)",
 			description: "Moon and Mars missions bring more weightlessness, radiation, isolation and communication delay, and less ability to rely on Earth; ISS research characterises these risks and countermeasures.",
-			usedFor: "Framing for on-board self-assessment and the Earth–Mars signal delay (Overview)."
+			usedFor: "Framing for on-board self-assessment and the ship-to-Earth signal delay (Overview)."
 		},
 		{
 			title: "DONKI WSA-ENLIL Simulations",
@@ -3234,7 +3343,7 @@ var AstraCoreBundle = (function(exports) {
 			url: "https://ssd.jpl.nasa.gov/planets/approx_pos.html",
 			publisher: "NASA JPL Solar System Dynamics (E. M. Standish)",
 			description: "Keplerian elements and rates for approximate planet positions, valid 1800–2050.",
-			usedFor: "Earth–Mars distance and one-way signal delay on today's date, computed in the browser."
+			usedFor: "Earth–Mars distance on each mission date, computed in the browser. The ship's signal delay is a growing share of it, from launch to arrival at Mars."
 		},
 		{
 			title: "Spaceflight Standard Measures",
@@ -3370,7 +3479,7 @@ var AstraCoreBundle = (function(exports) {
 				"immuneRadiation",
 				"metabolicCircadian"
 			],
-			inApp: "Works fully offline, shows today's Earth–Mars signal delay, and gives on-board guidance and a report for the flight surgeon."
+			inApp: "Works fully offline, shows the ship-to-Earth signal delay for the mission day, and gives on-board guidance and a report for the flight surgeon."
 		},
 		{
 			id: "gravity",
@@ -4288,14 +4397,24 @@ var AstraCoreBundle = (function(exports) {
 		const med = median(prior);
 		const why = "Outside Earth's magnetosphere, galactic cosmic rays deliver a steady dose and solar particle events can add more. Only the dosimeter gives your personal dose.";
 		const obs = `${formatDose(daily)} today, ${formatDose(cumulative, 1)} cumulative`;
-		const budget = RADIATION.missionExposureBudgetMsv;
-		if (budget !== null && cumulative >= budget) return {
+		const limit = input.settings.radiationLimitMsv ?? RADIATION.limit.default;
+		const cautionAt = Math.round(limit * RADIATION.cautionFraction);
+		const next = "Follow the approved mission exposure protocol and contact the medical officer when communication is available.";
+		if (cumulative >= limit) return {
 			status: "CRITICAL",
-			rules: [rule("rad-budget", "CRITICAL", "At or above the configured mission exposure budget", formatDose(cumulative, 1), `≥ ${budget} mSv`, RADIATION.ruleProvenance)],
+			rules: [rule("rad-limit", "CRITICAL", "At or above the mission dose limit", formatDose(cumulative, 1), `≥ ${limit} mSv`, RADIATION.limitProvenance)],
 			notes: [],
-			summary: `Cumulative dose has reached the configured mission exposure budget.`,
+			summary: `Cumulative dose ${formatDose(cumulative, 1)} has reached the configured mission limit of ${limit} mSv.`,
 			explanation: why,
-			next: "Follow the approved mission exposure protocol and contact the medical officer when communication is available."
+			next
+		};
+		if (cumulative >= cautionAt) return {
+			status: "CAUTION",
+			rules: [rule("rad-near-limit", "CAUTION", "Near the mission dose limit", formatDose(cumulative, 1), `≥ ${cautionAt} mSv (${Math.round(RADIATION.cautionFraction * 100)}% of ${limit} mSv)`, RADIATION.limitProvenance)],
+			notes: [],
+			summary: `Cumulative dose ${formatDose(cumulative, 1)} is above ${Math.round(RADIATION.cautionFraction * 100)}% of the configured mission limit.`,
+			explanation: why,
+			next
 		};
 		if (med !== null && prior.length >= 3 && daily > med * RADIATION.unusualDailyFactor) return {
 			status: "CAUTION",
@@ -4305,7 +4424,7 @@ var AstraCoreBundle = (function(exports) {
 			explanation: why,
 			next: "Confirm the dosimeter reading is current and from your device. Review the space-weather monitor and follow the approved radiation protection and shelter procedure when directed."
 		};
-		return nominal(`Dosimeter shows ${obs}, within the usual daily range.`, why, "Review the dosimeter and the space-weather monitor once per day.", budget === null ? ["No mission exposure budget is configured, so no cumulative critical limit applies."] : []);
+		return nominal(`Dosimeter shows ${obs}, within the usual daily range.`, why, "Review the dosimeter and the space-weather monitor once per day.", [`Mission dose limit: ${limit} mSv (adjustable in Thresholds).`]);
 	}
 	function pvtBaseline(days) {
 		const v = [];
@@ -4320,6 +4439,19 @@ var AstraCoreBundle = (function(exports) {
 		const base = pvtBaseline(input.days);
 		const obs = `${v} ms`;
 		const why = "Slower reaction time can reveal fatigue from sleep loss or workload before you notice it.";
+		const lo = input.settings.pvtMinMs ?? PVT.range.min;
+		const hi = input.settings.pvtMaxMs ?? PVT.range.max;
+		if (v > hi || v < lo) {
+			const slow = v > hi;
+			return {
+				status: "CAUTION",
+				rules: [rule(slow ? "pvt-above-range" : "pvt-below-range", "CAUTION", slow ? "Slower than the configured range" : "Faster than the configured range", obs, `${lo}–${hi} ms`, PVT.provenance)],
+				notes: [],
+				summary: `PVT mean reaction time ${obs} is outside the configured demonstration range of ${lo}–${hi} ms.`,
+				explanation: why,
+				next: slow ? "Repeat the measurement. Review recent sleep and workload, take extra care with safety-critical tasks and contact the medical officer when communication is available." : "Repeat the measurement and wait for each stimulus before responding."
+			};
+		}
 		if (base === null || day <= PVT.baselineDays) return nominal(`PVT mean reaction time is ${obs}. Baseline is being established (days 1–${PVT.baselineDays}).`, why, "Complete each scheduled PVT session.");
 		const limit = base * (1 + PVT.cautionSlowerFraction);
 		let slowChecks = 0;
@@ -4557,6 +4689,7 @@ var AstraCoreBundle = (function(exports) {
 		return list.reduce((a, b) => worst(a, b), "NOMINAL");
 	}
 	var name = (id) => SPACEFLIGHT_HAZARDS.find((h) => h.id === id).name;
+	var delayText = (m) => m < 1 ? `${Math.max(1, Math.round(m * 60))} s` : `${m.toFixed(1)} min`;
 	function hazardMap(i) {
 		const d = i.diagnostics;
 		const hazard = i.advisories.find((a) => a.level !== "ALL CLEAR");
@@ -4592,7 +4725,7 @@ var AstraCoreBundle = (function(exports) {
 				name: name("distance"),
 				status: null,
 				chip: i.linkUp ? "GROUND LINK UP" : "NO GROUND LINK",
-				facts: [`Earth–Mars signal delay today ${i.signalDelayMinutes.toFixed(1)} min one way`, i.queuedMessages ? `${i.queuedMessages} message${i.queuedMessages === 1 ? "" : "s"} queued for the medical officer` : "Every health function works on board without a link"],
+				facts: [`Signal to Earth ${delayText(i.signalDelayMinutes)} one way, ${delayText(i.signalDelayMinutes * 2)} for a reply`, i.queuedMessages ? `${i.queuedMessages} message${i.queuedMessages === 1 ? "" : "s"} queued for the medical officer` : "Every health function works on board without a link"],
 				note: "A question and its answer take at least twice the delay, so the crew acts first and reports after.",
 				action: { kind: "contact" },
 				actionLabel: "Contact medical officer"
@@ -4633,59 +4766,6 @@ var AstraCoreBundle = (function(exports) {
 				actionLabel: "Temperature guide"
 			}
 		];
-	}
-	// src/engine/lightTime.ts
-	var EARTH = {
-		a: [1.00000261, 562e-8],
-		e: [.01671123, -4392e-8],
-		i: [-1531e-8, -.01294668],
-		L: [100.46457166, 35999.37244981],
-		peri: [102.93768193, .32327364],
-		node: [0, 0]
-	};
-	var MARS = {
-		a: [1.52371034, 1847e-8],
-		e: [.0933941, 7882e-8],
-		i: [1.84969142, -.00813131],
-		L: [-4.55343205, 19140.30268499],
-		peri: [-23.94362959, .44441088],
-		node: [49.55953891, -.29257343]
-	};
-	var AU_KM = 149597870.7;
-	var C_KM_S = 299792.458;
-	var RAD$1 = Math.PI / 180;
-	/** Heliocentric ecliptic position (J2000) in AU. */
-	function heliocentric(el, date) {
-		const T = (date.getTime() / 864e5 + 2440587.5 - 2451545) / 36525;
-		const v = (p) => p[0] + p[1] * T;
-		const a = v(el.a);
-		const e = v(el.e);
-		const i = v(el.i) * RAD$1;
-		const L = v(el.L);
-		const peri = v(el.peri);
-		const node = v(el.node);
-		const w = (peri - node) * RAD$1;
-		const O = node * RAD$1;
-		let M = ((L - peri) % 360 + 540) % 360 - 180;
-		M *= RAD$1;
-		let E = M + e * Math.sin(M);
-		for (let k = 0; k < 8; k++) E -= (E - e * Math.sin(E) - M) / (1 - e * Math.cos(E));
-		const xp = a * (Math.cos(E) - e);
-		const yp = a * Math.sqrt(1 - e * e) * Math.sin(E);
-		return [
-			(Math.cos(w) * Math.cos(O) - Math.sin(w) * Math.sin(O) * Math.cos(i)) * xp + (-Math.sin(w) * Math.cos(O) - Math.cos(w) * Math.sin(O) * Math.cos(i)) * yp,
-			(Math.cos(w) * Math.sin(O) + Math.sin(w) * Math.cos(O) * Math.cos(i)) * xp + (-Math.sin(w) * Math.sin(O) + Math.cos(w) * Math.cos(O) * Math.cos(i)) * yp,
-			Math.sin(w) * Math.sin(i) * xp + Math.cos(w) * Math.sin(i) * yp
-		];
-	}
-	function earthMarsDistanceAu(date) {
-		const [x1, y1, z1] = heliocentric(EARTH, date);
-		const [x2, y2, z2] = heliocentric(MARS, date);
-		return Math.hypot(x2 - x1, y2 - y1, z2 - z1);
-	}
-	/** One-way radio signal time between Earth and Mars, in minutes. */
-	function earthMarsLightMinutes(date) {
-		return earthMarsDistanceAu(date) * AU_KM / C_KM_S / 60;
 	}
 	// src/engine/medicalContact.ts
 	/**
@@ -5006,7 +5086,7 @@ var AstraCoreBundle = (function(exports) {
 			const source = i.diagnostics[m].latest?.source;
 			return source === "manual" || source === "tuesday" || source === "device" || source === "device-sim";
 		});
-		push("ASTRA-MED HEALTH SUMMARY FOR THE FLIGHT SURGEON", `Mission day ${i.day}. Generated ${i.generatedAt} (UTC) on the crew device.`, `Scenario: ${i.scenario.code}, ${i.scenario.name}.`, `Data: ${crewEntered ? "synthetic demo telemetry plus crew-entered readings (manual and Tuesday voice)" : "SYNTHETIC demo telemetry, not real astronaut data"}.`, "Thresholds are prototype demonstration ranges, not NASA flight rules.", `Earth–Mars one-way signal delay today: ${i.signalDelayMinutes.toFixed(1)} min.`, "", `OVERALL STATUS: ${i.overall.status} (${i.overall.counts.NOMINAL} nominal, ${i.overall.counts.CAUTION} caution, ${i.overall.counts.CRITICAL} critical)`, "", "BODY SYSTEMS");
+		push("ASTRA-MED HEALTH SUMMARY FOR THE FLIGHT SURGEON", `Mission day ${i.day}. Generated ${i.generatedAt} (UTC) on the crew device.`, `Scenario: ${i.scenario.code}, ${i.scenario.name}.`, `Data: ${crewEntered ? "synthetic demo telemetry plus crew-entered readings (manual and Tuesday voice)" : "SYNTHETIC demo telemetry, not real astronaut data"}.`, "Thresholds are prototype demonstration ranges, not NASA flight rules.", `Ship–Earth one-way signal delay on this mission day: ${i.signalDelayMinutes.toFixed(1)} min.`, "", `OVERALL STATUS: ${i.overall.status} (${i.overall.counts.NOMINAL} nominal, ${i.overall.counts.CAUTION} caution, ${i.overall.counts.CRITICAL} critical)`, "", "BODY SYSTEMS");
 		for (const id of Object.keys(BODY_SYSTEMS)) push(`- ${BODY_SYSTEMS[id].name}: ${i.systems[id].status}`);
 		const flagged = Object.values(i.diagnostics).filter((d) => d.status !== "NOMINAL");
 		push("", "INDICATORS OUTSIDE THE CONFIGURED RANGE");
@@ -5397,7 +5477,7 @@ var AstraCoreBundle = (function(exports) {
 		if (hazard) lines.push(`Environmental hazard ${hazard.level} (not a personal dose).`);
 		lines.push(`Next action from the protocol engine: ${ctx.primaryAction}`);
 		if (ctx.recentEnergy !== null) lines.push(`Latest self-reported energy: ${ctx.recentEnergy}/5.`);
-		lines.push(`One-way Earth–Mars signal delay today: ${ctx.lightMinutes.toFixed(1)} minutes.`);
+		lines.push(`One-way signal delay from the ship to Earth on this mission day: ${ctx.lightMinutes.toFixed(1)} minutes; a reply takes about ${(ctx.lightMinutes * 2).toFixed(0)} minutes.`);
 		return lines.join("\n");
 	}
 	var TUESDAY_SYSTEM_PROMPT = `You are Tuesday, the on-board companion in ASTRA-MED, a prototype health console for astronauts on a long mission. You are part assistant, part friend: warm, calm, brief, a little playful, never fake-cheerful.
@@ -5482,7 +5562,8 @@ Rules you must follow:
 	}
 	function offlineReply(intent, ctx, passages) {
 		const actions = actionsFor(intent, ctx);
-		const tip = passages[0] ? `${passages[0].doc.text} [1]` : "";
+		const tip = passages[0] && passages[0].score >= 5 ? `${passages[0].doc.text} [1]` : "";
+		const sleepTip = passages[0] && /sleep|circadian|rest/i.test(passages[0].doc.text) ? tip : "";
 		return {
 			text: {
 				crisis: CRISIS_REPLY,
@@ -5493,7 +5574,7 @@ Rules you must follow:
 				tired: `That sounds draining. ${ctx.diagnostics.sleep.latest && typeof ctx.diagnostics.sleep.latest.value === "number" ? `Your last logged sleep was ${ctx.diagnostics.sleep.latest.value} h. ` : ""}Keep the planned sleep period tonight, and avoid starting safety-critical work while very tired. A slow breathing round might help you reset now.`,
 				low: "I hear you. Being this far from home is hard, and the signal delay makes it harder. Want to look at Earth together for a few minutes? If the feeling sticks around, talk to a crewmate or the behavioural-health contact.",
 				stressed: "Okay. Let's slow things down for a minute. One breathing round: in for 4, out for 6. Then, if you want, tell me what's on your mind.",
-				sleep: tip || "Log your sleep the same way each day and keep the planned sleep period. If short sleep continues, note it for the medical officer.",
+				sleep: sleepTip || `${ctx.diagnostics.sleep.latest && typeof ctx.diagnostics.sleep.latest.value === "number" ? `Your last logged sleep was ${ctx.diagnostics.sleep.latest.value} hours. ` : ""}Keep the planned sleep period, dim the lights and screens in the hour before it, and log your sleep the same way each day. If short sleep continues, note it for the medical officer.`,
 				earth: "Opening the Earth view. The globe uses NASA imagery of Earth from yesterday, lit for the real time of day.",
 				game: "Orbit Catch is ready: pinch or click the supply pods before they drift away. One minute, no pressure.",
 				breathe: "One minute of paced breathing: in for 4 seconds, out for 6. Open your hand to breathe in and close it to breathe out, or just follow the ring.",
@@ -5501,7 +5582,7 @@ Rules you must follow:
 				greeting: `Hey. ${ctx.overall === "NOMINAL" ? "Your readings look settled today." : `You're ${ctx.overall} today, so let's keep an eye on that.`} How are you feeling?`,
 				thanks: "Anytime. I'm here.",
 				help: "I can explain your readings, track your mood and energy, spot when your pattern drifts from your own baseline, and help you recharge with an Earth view, a game or a breathing round. With a local model running I can also read a photo or a lab report on this device.",
-				other: tip ? `Here's what the onboard guidance says: ${tip}` : "I don't have guidance on that in my onboard library. If it's about your health, review the mission-approved protocol and contact the medical officer when communication is available."
+				other: tip ? `Here's what the onboard guidance says: ${tip}` : "I don't have that in my onboard library. I can tell you how you're doing, log a reading, or explain any of your readings. If it's about your health, review the mission-approved protocol and contact the medical officer when communication is available."
 			}[intent],
 			actions
 		};
@@ -5972,6 +6053,9 @@ Rules you must follow:
 		selectedDay: MISSION.defaultDay,
 		aredTargetMinutes: ARED.defaultTargetMinutes,
 		hydrationTargetLiters: HYDRATION.defaultTargetLiters,
+		radiationLimitMsv: RADIATION.limit.default,
+		pvtMinMs: PVT.range.min,
+		pvtMaxMs: PVT.range.max,
 		trendWindow: 30,
 		trendTab: "heartRate"
 	};
@@ -6081,6 +6165,14 @@ Rules you must follow:
 					...state.settings,
 					trendTab
 				} });
+			},
+			/** Slider limits from the Thresholds screen. Values are clamped to their slider bounds. */
+			updateLimits(patch) {
+				const persisted = commit({ settings: sanitizeSettings({
+					...state.settings,
+					...patch
+				}, DEFAULT_SETTINGS) ?? state.settings });
+				return saved(persisted, "Limits saved.");
 			},
 			updatePlanTargets(aredTargetMinutes, hydrationTargetLiters) {
 				const persisted = commit({ settings: {
@@ -6659,13 +6751,16 @@ Rules you must follow:
 		/** Everything the engines derive for the selected day, same wiring as the web console. */
 		function model() {
 			const { settings, measurements, completions, followUps: followUpLog } = mission.getState();
-			const { scenarioId, selectedDay: day, aredTargetMinutes, hydrationTargetLiters } = settings;
+			const { scenarioId, selectedDay: day, aredTargetMinutes, hydrationTargetLiters, radiationLimitMsv, pvtMinMs, pvtMaxMs } = settings;
 			const days = buildEffectiveDays(scenarioId, measurements);
 			const engineInput = {
 				days,
 				settings: {
 					aredTargetMinutes,
-					hydrationTargetLiters
+					hydrationTargetLiters,
+					radiationLimitMsv,
+					pvtMinMs,
+					pvtMaxMs
 				},
 				evaluatedAt: now().toISOString()
 			};
@@ -6722,14 +6817,14 @@ Rules you must follow:
 				trends: m.trends,
 				drift: m.drift,
 				primaryAction: m.primaryAction.text,
-				lightMinutes: earthMarsLightMinutes(now()),
+				lightMinutes: missionSignalMinutes(m.day),
 				recentEnergy
 			};
 		}
 		function snapshot(args = {}) {
 			const m = model();
 			const linkUp = args.linkUp ?? false;
-			const delay = earthMarsLightMinutes(now());
+			const delay = missionSignalMinutes(m.day);
 			const scenario = SCENARIOS[m.settings.scenarioId];
 			const td = tuesday.getState();
 			const wellbeing = wellbeingSummary(td.activity, m.day);
@@ -7012,7 +7107,7 @@ Rules you must follow:
 				readiness: m.readiness,
 				days: m.days,
 				generatedAt: now().toISOString().slice(0, 16).replace("T", " "),
-				signalDelayMinutes: earthMarsLightMinutes(now()),
+				signalDelayMinutes: missionSignalMinutes(m.day),
 				drift: m.drift
 			});
 		}
@@ -7030,7 +7125,7 @@ Rules you must follow:
 				report: args.report.slice(0, 1200),
 				actionsTaken: args.actionsTaken.slice(0, 800),
 				linkUp: args.linkUp,
-				signalDelayMinutes: earthMarsLightMinutes(now())
+				signalDelayMinutes: missionSignalMinutes(m.day)
 			});
 		}
 		const ACTIVITY_KINDS = [

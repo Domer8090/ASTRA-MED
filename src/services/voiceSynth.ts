@@ -120,60 +120,105 @@ function findBestVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | n
   return candidates.reduce((best, voice) => score(voice) > score(best) ? voice : best);
 }
 
-function cleanSpeechText(text: string): string {
-  const cleaned = text.replace(/\[\d+\]/g, "").replace(/\[Tuesday removed[^\]]*\]/g, "").replace(/[*_#`~]/g, "").replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/\s+/g, " ").trim();
-  if (!cleaned) return "";
-  const sentences = cleaned.match(/[^.!?]+(?:[.!?]+|$)/g) ?? [cleaned];
-  let concise = sentences.slice(0, 2).join(" ").trim();
-  if (concise.length > 280) {
-    const cutoff = concise.lastIndexOf(" ", 260);
-    concise = `${concise.slice(0, cutoff > 160 ? cutoff : 260).trimEnd()}.`;
+/** Longest piece sent to the voice in one go. Kokoro drops text past its input limit. */
+const CHUNK_CHARS = 220;
+
+/** Clean text for speech and split it into sentence-sized pieces. Nothing is dropped. */
+export function speechChunks(text: string): string[] {
+  const cleaned = text.replace(/\s*\[\d+\]/g, "").replace(/\[Tuesday removed[^\]]*\]/g, "").replace(/[*_#`~]/g, "").replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/\s+/g, " ").trim();
+  if (!cleaned) return [];
+  const sentences = (cleaned.match(/[^.!?]+(?:[.!?]+|$)/g) ?? [cleaned]).map((x) => x.trim()).filter(Boolean);
+  const chunks: string[] = [];
+  let current = "";
+  const push = (piece: string) => {
+    if (!current) current = piece;
+    else if (current.length + 1 + piece.length <= CHUNK_CHARS) current = `${current} ${piece}`;
+    else {
+      chunks.push(current);
+      current = piece;
+    }
+  };
+  for (const sentence of sentences) {
+    if (sentence.length <= CHUNK_CHARS) {
+      push(sentence);
+      continue;
+    }
+    // A very long sentence: break at commas, then at spaces.
+    for (const part of sentence.split(/(?<=[,;:])\s+/)) {
+      let rest = part;
+      while (rest.length > CHUNK_CHARS) {
+        const cut = rest.lastIndexOf(" ", CHUNK_CHARS);
+        const at = cut > 60 ? cut : CHUNK_CHARS;
+        push(rest.slice(0, at).trim());
+        rest = rest.slice(at).trim();
+      }
+      if (rest) push(rest);
+    }
   }
-  return concise;
+  if (current) chunks.push(current);
+  return chunks;
 }
 
-function speakWithSystemVoice(text: string, sequence: number, options: SpeakOptions): void {
+function speakWithSystemVoice(chunks: readonly string[], sequence: number, options: SpeakOptions): void {
   if (sequence !== utteranceSequence) return;
+  if (!chunks.length) {
+    finishGate(sequence);
+    return;
+  }
   if (typeof window === "undefined" || !("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") {
     finishGate(sequence);
     options.onError?.(new Error("No speech output is available."));
     return;
   }
   try {
-    const utterance = new SpeechSynthesisUtterance(text);
     const voices = window.speechSynthesis.getVoices();
     if (voices.length) cachedVoice = findBestVoice(voices);
-    if (cachedVoice) utterance.voice = cachedVoice;
-    utterance.lang = cachedVoice?.lang || "en-US";
-    utterance.pitch = options.pitch ?? 0.94;
-    utterance.rate = options.rate ?? 1.06;
-    utterance.volume = options.volume ?? 1;
-    utterance.onstart = () => options.onStart?.();
-    utterance.onend = () => finishGate(sequence);
-    utterance.onerror = (event) => {
-      if (sequence !== utteranceSequence) return;
-      options.onError?.(event);
-      finishGate(sequence);
-    };
-    window.speechSynthesis.speak(utterance);
+    // One utterance per piece: Chrome stops long single utterances after about 15 seconds.
+    chunks.forEach((chunk, i) => {
+      const utterance = new SpeechSynthesisUtterance(chunk);
+      if (cachedVoice) utterance.voice = cachedVoice;
+      utterance.lang = cachedVoice?.lang || "en-US";
+      utterance.pitch = options.pitch ?? 0.94;
+      utterance.rate = options.rate ?? 1.06;
+      utterance.volume = options.volume ?? 1;
+      if (i === 0) utterance.onstart = () => options.onStart?.();
+      if (i === chunks.length - 1) utterance.onend = () => finishGate(sequence);
+      utterance.onerror = (event) => {
+        if (sequence !== utteranceSequence) return;
+        options.onError?.(event);
+        finishGate(sequence);
+      };
+      window.speechSynthesis.speak(utterance);
+    });
   } catch (error) {
     options.onError?.(error);
     finishGate(sequence);
   }
 }
 
-async function playKokoro(text: string, sequence: number, options: SpeakOptions): Promise<boolean> {
+/** Ask the local Kokoro server for one piece. Null if it is unavailable or too slow. */
+async function synthesizeChunk(text: string): Promise<AudioBuffer | null> {
   const controller = new AbortController();
   activeAbort = controller;
-  const timeout = window.setTimeout(() => controller.abort(), 5000);
+  const timeout = window.setTimeout(() => controller.abort(), 8000);
   try {
     const blob = await synthesizeLocalSpeech(text, "am_adam", controller.signal);
-    if (!blob.size || sequence !== utteranceSequence || globalMuted) return false;
+    if (!blob.size) return null;
     unlockTuesdaySpeech();
-    if (!outputContext) return false;
+    if (!outputContext) return null;
     if (outputContext.state === "suspended") await outputContext.resume();
-    const buffer = await outputContext.decodeAudioData(await blob.arrayBuffer());
-    if (sequence !== utteranceSequence || globalMuted) return false;
+    return await outputContext.decodeAudioData(await blob.arrayBuffer());
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timeout);
+    if (activeAbort === controller) activeAbort = null;
+  }
+}
+
+function playBuffer(buffer: AudioBuffer, sequence: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!outputContext || sequence !== utteranceSequence || globalMuted) return resolve(false);
     const source = outputContext.createBufferSource();
     activeSource = source;
     source.buffer = buffer;
@@ -181,17 +226,29 @@ async function playKokoro(text: string, sequence: number, options: SpeakOptions)
     source.onended = () => {
       source.disconnect();
       if (activeSource === source) activeSource = null;
-      finishGate(sequence);
+      resolve(sequence === utteranceSequence);
     };
-    options.onStart?.();
     source.start();
-    return true;
-  } catch {
-    return false;
-  } finally {
-    window.clearTimeout(timeout);
-    if (activeAbort === controller) activeAbort = null;
+  });
+}
+
+/**
+ * Speak every piece with Kokoro, preparing the next piece while the current one plays.
+ * Returns how many pieces were spoken, so the system voice can finish the rest.
+ */
+async function playKokoro(chunks: readonly string[], sequence: number, options: SpeakOptions): Promise<number> {
+  let next = synthesizeChunk(chunks[0]!);
+  for (let i = 0; i < chunks.length; i++) {
+    const buffer = await next;
+    if (sequence !== utteranceSequence || globalMuted) return chunks.length;
+    if (!buffer) return i;
+    next = i + 1 < chunks.length ? synthesizeChunk(chunks[i + 1]!) : Promise.resolve(null);
+    if (i === 0) options.onStart?.();
+    const finished = await playBuffer(buffer, sequence);
+    if (!finished) return chunks.length;
   }
+  finishGate(sequence);
+  return chunks.length;
 }
 
 export interface SpeakOptions {
@@ -209,20 +266,113 @@ export function speakTuesday(text: string, options: SpeakOptions = {}): boolean 
     if (globalMuted) stopSpeaking();
     return false;
   }
-  const spokenText = cleanSpeechText(text);
-  if (!spokenText) return false;
+  const chunks = speechChunks(text);
+  if (!chunks.length) return false;
 
   clearPlayer();
   const sequence = ++utteranceSequence;
   activeOptions = options;
   startGate();
-  void playKokoro(spokenText, sequence, options).then((played) => {
-    if (sequence !== utteranceSequence || played) return;
-    // A failed/offline Kokoro request falls straight back to local OS speech.
+  void playKokoro(chunks, sequence, options).then((spoken) => {
+    if (sequence !== utteranceSequence || spoken >= chunks.length) return;
+    // Kokoro unavailable or failed part-way: the device voice says the rest, so nothing is cut.
     if (activeAbort) activeAbort = null;
-    speakWithSystemVoice(spokenText, sequence, options);
+    speakWithSystemVoice(chunks.slice(spoken), sequence, options);
   });
   return true;
+}
+
+/** One piece with the device voice. Resolves when it ends or fails. */
+function speakSystemChunk(text: string, sequence: number, options: SpeakOptions): Promise<void> {
+  return new Promise((resolve) => {
+    if (sequence !== utteranceSequence || typeof window === "undefined" || !("speechSynthesis" in window) || typeof SpeechSynthesisUtterance === "undefined") return resolve();
+    try {
+      const voices = window.speechSynthesis.getVoices();
+      if (voices.length) cachedVoice = findBestVoice(voices);
+      const utterance = new SpeechSynthesisUtterance(text);
+      if (cachedVoice) utterance.voice = cachedVoice;
+      utterance.lang = cachedVoice?.lang || "en-US";
+      utterance.pitch = options.pitch ?? 0.94;
+      utterance.rate = options.rate ?? 1.06;
+      utterance.volume = options.volume ?? 1;
+      utterance.onend = () => resolve();
+      utterance.onerror = () => resolve();
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      resolve();
+    }
+  });
+}
+
+/** A reply spoken while it is still being written: push sentences as they arrive, then end. */
+export interface SpeechStream {
+  push: (text: string) => void;
+  end: () => void;
+}
+
+/**
+ * Start speaking a reply before the whole reply exists. Each pushed sentence is
+ * voiced as soon as the previous one finishes, so the first words play while
+ * the local model is still writing the rest. Returns null when muted.
+ */
+export function openSpeechStream(options: SpeakOptions = {}): SpeechStream | null {
+  if (typeof window === "undefined" || globalMuted) {
+    if (globalMuted) stopSpeaking();
+    return null;
+  }
+  clearPlayer();
+  const sequence = ++utteranceSequence;
+  activeOptions = options;
+  startGate();
+  const queue: string[] = [];
+  let ended = false;
+  let wake: (() => void) | null = null;
+  const live = () => sequence === utteranceSequence && !globalMuted;
+  const next = async (): Promise<string | null> => {
+    while (!queue.length) {
+      if (ended || !live()) return null;
+      await new Promise<void>((resolve) => { wake = resolve; });
+      wake = null;
+    }
+    return queue.shift() ?? null;
+  };
+  void (async () => {
+    let useSystem = false;
+    let started = false;
+    let chunk = await next();
+    let audio = chunk ? synthesizeChunk(chunk) : null;
+    while (chunk !== null && live()) {
+      const buffer = audio ? await audio : null;
+      if (!live()) return;
+      // Prepare the next piece while this one plays.
+      const following = next();
+      const followingAudio = following.then((c) => (c && !useSystem && live() ? synthesizeChunk(c) : null));
+      if (!started) {
+        started = true;
+        options.onStart?.();
+      }
+      if (buffer) {
+        if (!(await playBuffer(buffer, sequence))) return;
+      } else {
+        useSystem = true;
+        await speakSystemChunk(chunk, sequence, options);
+      }
+      chunk = await following;
+      audio = useSystem ? null : followingAudio;
+    }
+    finishGate(sequence);
+  })();
+  return {
+    push: (text) => {
+      if (!live()) return;
+      queue.push(...speechChunks(text));
+      wake?.();
+    },
+    end: () => {
+      ended = true;
+      wake?.();
+    },
+  };
 }
 
 /** Stop speech output; keep the microphone gate closed for its acoustic tail. */

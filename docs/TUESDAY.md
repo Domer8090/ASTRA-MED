@@ -20,7 +20,7 @@ crew message
   -> retrieve(): BM25 over the onboard protocol library (src/data/knowledgeBase.ts)
   -> on-device model running?        no  -> offlineReply(): rules + the top passage
        yes -> buildHealthBrief() + passages + recent turns
-           -> Ollama on localhost (Qwen3 8B preferred)
+           -> Ollama on localhost (a small model without a thinking pass preferred, e.g. llama3.2:3b)
            -> safetyFilter(): removes medication, dose, diagnosis and
               exercise-change sentences, strips <think> blocks
   -> answer with cited sources and action buttons (Earth, game, breathe,
@@ -39,7 +39,7 @@ with any threshold.
 | Request | Where it lives | Notes |
 | --- | --- | --- |
 | MedGemma 1.5 4B: lab reports and clinical images | `src/hooks/useTuesday.tsx`, `IMAGE_PROMPT` and `LAB_PROMPT` in `src/engine/tuesdayEngine.ts`, `compressImage` in `src/services/localModel.ts` | Picks any installed model whose name contains `medgemma`, or the one chosen in settings |
-| Qwen3 8B: fast conversation | `src/services/localModel.ts` | Picks `qwen3*` first, then any chat model; sends `think: false` to Qwen3 for short answers |
+| Chat model: fast conversation | `src/services/localModel.ts` | Prefers llama3.2, qwen2.5, gemma3, phi, then llama3 and Qwen3 last (some Ollama builds ignore `think: false`, so Qwen3 reasons at length). Replies are capped at 220 tokens, the model stays loaded for 30 minutes, and Tuesday falls back to onboard rules if no word arrives in 8 s (voice) or 20 s (chat) |
 | Isolation Forest on the crew member's own time series | `src/engine/baselineEngine.ts` | Heart rate, blood pressure, temperature, sleep and mood (the dataset has no HRV). Passed to the model in the health brief |
 | Personal baseline, not Earth averages | same | First 14 mission days; drivers read "27% higher than your baseline of 60 bpm" |
 | RAG knowledge base | `src/engine/retrieval.ts`, `src/data/knowledgeBase.ts` | ChromaDB and FAISS need a server, so the browser uses a BM25 keyword index. Official ISS medical checklists are not public; Tuesday indexes ASTRA-MED's own sourced guidance instead |

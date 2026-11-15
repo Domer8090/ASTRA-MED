@@ -9,7 +9,7 @@ import { useUiActions, useUiState } from "../hooks/useUi";
 import { cumulativeDoseAt, manualHistory } from "../services/telemetryService";
 import { tasksForDay } from "../engine/readinessEngine";
 import { ALL_METRIC_IDS, type GlucoseContext, type MetricId, type SymptomValue } from "../types/health";
-import { currentShipTime, formatLocalDateTime, formatReadingStamp } from "../utils/dates";
+import { currentShipTime, formatLocalDateTime, formatReadingDate } from "../utils/dates";
 import { formatWithUnit, METRIC_UNITS } from "../utils/formatting";
 import { entrySpec, isMetricId, validateMeasurement, type FieldErrors, type MeasurementDraft } from "../utils/validation";
 import { Dialog } from "./shared/Dialog";
@@ -329,7 +329,7 @@ export function MeasurementForm() {
                 <li key={m.id} className="flex items-center justify-between gap-2 px-3 py-1.5">
                   <span className="min-w-0 text-sm">
                     <span className="num text-ink">{formatWithUnit(m.metricId, m.value)}</span>
-                    <span className="num ml-2 text-ink-2">{formatReadingStamp(m.missionDay, m.recordedAt)}</span>
+                    <span className="num ml-2 text-ink-2">{formatReadingDate(m.missionDay, m.recordedAt)}</span>
                     {m.enteredAt ? <span className="ml-2 text-2xs text-ink-3">entered {formatLocalDateTime(m.enteredAt)}</span> : null}
                   </span>
                   <button

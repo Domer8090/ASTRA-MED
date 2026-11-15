@@ -1,20 +1,20 @@
-import { useEffect, useId, useState, type FormEvent } from "react";
-import { Compass, DatabaseZap, ExternalLink, HardDrive, RotateCcw, ShieldCheck } from "lucide-react";
-import { ARED, describeThresholds, HYDRATION, MISSION } from "../config/thresholds";
+import { useId, useState, type CSSProperties, type ReactNode } from "react";
+import { Compass, DatabaseZap, ExternalLink, HardDrive, RotateCcw, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import { ARED, describeThresholds, HYDRATION, MISSION, PLAN_SLIDERS, PVT, RADIATION } from "../config/thresholds";
+import { gaugeTracks, rangeText } from "../engine/gauges";
 import { ARCHIVE_PROVENANCE } from "../data/fallbackDonki";
 import { SEP_DOSE_MODEL_SUMMARY } from "../data/scenarioHazards";
 import { LIMITATIONS_STATEMENT, OSDR_STUDIES, REFERENCE_SOURCES } from "../data/sources";
-import { BODY_SYSTEMS } from "../data/bodySystems";
-import { HRP_HAZARDS_URL, SPACEFLIGHT_HAZARDS } from "../data/spaceflightHazards";
 import { useMissionState, useMissionStore } from "../hooks/useMissionState";
 import { useToast } from "../hooks/useToast";
 import { useOnboarding } from "../hooks/useOnboarding";
-import { earthMarsLightMinutes } from "../engine/lightTime";
-import { formatNumber } from "../utils/formatting";
+import { formatSignalDelay, missionSignalMinutes } from "../utils/dates";
 import { useUiActions, useUiState, type SourcesTab } from "../hooks/useUi";
 import { usingDemoKey } from "../services/nasaDonkiApi";
 import type { ThresholdProvenance } from "../types/health";
 import { Dialog } from "./shared/Dialog";
+import { StatusBadge } from "./shared/StatusBadge";
+import { STATUS_KEY } from "../data/aboutCopy";
 import { PROVENANCE_DESCRIPTIONS, ProvenanceTag, type Provenance } from "./shared/ProvenanceTag";
 
 const TABS: { id: SourcesTab; label: string }[] = [
@@ -34,190 +34,83 @@ const PROV_TAG: Record<ThresholdProvenance, Provenance> = {
 function About() {
   const { openSources, closeSources } = useUiActions();
   const { startTour } = useOnboarding();
-  const steps = [
-    {
-      title: "Sense and log",
-      text: "Vital signs, sleep, mood, exercise and dosimeter readings (synthetic demo telemetry or your own entries), plus NASA DONKI space-weather records fetched live when online.",
-    },
-    {
-      title: "Deterministic triage",
-      text: "A rules engine compares each reading with its configured prototype range, checks whether a change persists over several days, flags stale data and rolls the result up to five body systems. Every status keeps the rule that produced it.",
-    },
-    {
-      title: "Guided action",
-      text: "Plain-English self-checks and countermeasures, ordered by priority, each naming its source indicator, rule and scientific context or prototype assumption. Records stay on board for the flight surgeon.",
-    },
-  ];
+  const day = useMissionState((st) => st.settings.selectedDay);
+  const signal = missionSignalMinutes(day);
+  const shown = formatSignalDelay(signal);
+  const reply = formatSignalDelay(signal * 2);
   return (
-    <div className="space-y-6">
-      <div>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="font-cond text-xl font-bold text-ink">ASTRA-MED: Crew Health. Mission Ready.</h3>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={() => {
-              closeSources();
-              startTour();
-            }}
-          >
-            <Compass aria-hidden="true" className="h-4 w-4" />
-            Take the 1-minute tour
-          </button>
+    <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="space-y-5">
+        <div>
+          <h3 className="font-cond text-2xl font-bold text-ink">ASTRA-MED</h3>
+          <p className="mt-1 text-lg text-ink">Checks crew health on board, without waiting for Earth.</p>
         </div>
-        <p className="mt-2 max-w-[70ch] text-base text-ink">
-          <span className="font-semibold">The problem.</span> Between Mars and Earth a radio signal takes about 3 to 22 minutes each way, so a question to the flight surgeon and its answer can take most of an hour. Deep-space crews need to triage routine health questions on board, without waiting for the ground.{" "}
-          <span className="text-ink-2">
-            On today&apos;s real date the one-way delay is <span className="num text-ink">{formatNumber(earthMarsLightMinutes(new Date()), 1)}</span> minutes (NASA JPL approximate planetary positions).
-          </span>
-        </p>
-      </div>
-
-      <div id="demo-data" className="rounded-tile border border-line-strong p-4">
-        <h4 className="flex items-center gap-2 font-cond text-md font-bold text-ink">
-          <span className="chip-tag border-line-strong bg-raised text-ink">DEMO DATA</span>
-          What is simulated and what is real
-        </h4>
-        <dl className="mt-2 grid gap-3 text-sm md:grid-cols-3">
-          <div>
-            <dt className="font-semibold text-ink">Synthetic (demo)</dt>
-            <dd className="mt-0.5 text-ink-2">
-              180 days of health telemetry, the adherence history for days you have not marked, the XP and streaks derived from it, the countermeasure targets, and the scenario events, including the Scenario C dosimeter overlay. None of it is real astronaut data.
-            </dd>
-          </div>
-          <div>
-            <dt className="font-semibold text-ink">Real NASA data</dt>
-            <dd className="mt-0.5 text-ink-2">
-              DONKI space-weather records, labelled LIVE, CACHED or ARCHIVED by where they came from, and the NASA references cited with each recommendation.
-            </dd>
-          </div>
-          <div>
-            <dt className="font-semibold text-ink">Yours</dt>
-            <dd className="mt-0.5 text-ink-2">
-              Measurements you enter yourself (MANUAL), readings logged by Tuesday from voice (TUESDAY), readings Auto Sync saved from a Bluetooth device (DEVICE) or the simulated mission-hardware bridge (SIM DEVICE, synthetic values), and tasks you mark. They stay in this browser and override the demo values for that day.
-            </dd>
-          </div>
-        </dl>
-      </div>
-
-      <div className="rounded-tile border border-line p-4">
-        <h4 className="flex items-center gap-2 font-cond text-md font-bold text-tue">
-          Tuesday voice logging
-        </h4>
-        <p className="mt-1.5 text-sm text-ink-2 leading-relaxed">
-          Tuesday uses local Whisper for speech recognition, Qwen3 4B to split requests with multiple commands, and the deterministic onboard parser to validate every reading before it is logged. Hard questions go to the local Tuesday model. Kokoro ONNX is the preferred local neural voice; if it is unavailable or fails, Tuesday uses the best installed English system voice. Speech pauses the microphone through a 300 ms audio tail so Tuesday does not hear its own response. Audio and health data stay on this device.
-        </p>
-        <pre className="mt-3 overflow-x-auto rounded-tile border border-line bg-[#060B14] p-3 font-mono text-xs text-ink-2"><code>{`# One-time macOS setup\nbrew install whisper-cpp ffmpeg ollama python@3.12 espeak-ng\nnpm run voice:setup\nnpm run voice:setup:kokoro\n\n# Terminal 1\nnpm run dev\n\n# Terminal 2\nnpm run voice:local\n\n# Check local voice services\ncurl http://127.0.0.1:11435/health`}</code></pre>
-        <p className="mt-2 text-xs text-ink-3">
-          Select Tuesday mode in the console overview or navigation rail for voice logging, the day's checklist and the action queue.
-        </p>
-      </div>
-
-      <div>
-        <h4 className="label">The five hazards of human spaceflight</h4>
-        <p className="mt-1 max-w-[80ch] text-sm text-ink-2">
-          NASA&apos;s Human Research Program groups spaceflight risks into five hazards. This is how ASTRA-MED&apos;s body systems and features relate to each one (our mapping, not a NASA table).{" "}
-          <a href={HRP_HAZARDS_URL} target="_blank" rel="noopener noreferrer" className="link inline-flex items-center gap-0.5">
-            NASA HRP: 5 Hazards
-            <ExternalLink aria-hidden="true" className="h-3 w-3" />
-          </a>
-        </p>
-        <div className="mt-2 overflow-x-auto rounded-tile border border-line">
-          <table className="w-full min-w-[620px] border-collapse text-left text-sm">
-            <caption className="sr-only">Five hazards, the body systems they affect and what ASTRA-MED does for each</caption>
-            <thead className="bg-panel">
-              <tr>
-                {["Hazard", "Body systems", "What ASTRA-MED watches or does"].map((h) => (
-                  <th key={h} scope="col" className="label border-b border-line px-3 py-2">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {SPACEFLIGHT_HAZARDS.map((h) => (
-                <tr key={h.id} className="border-b border-line align-top last:border-b-0">
-                  <th scope="row" className="px-3 py-2 font-semibold text-ink">
-                    {h.name}
-                    <span className="mt-0.5 block text-2xs font-normal text-ink-3">{h.summary}</span>
-                  </th>
-                  <td className="px-3 py-2 text-ink-2">{h.systems.length === 5 ? "All five" : h.systems.map((s) => BODY_SYSTEMS[s].shortName).join(", ")}</td>
-                  <td className="px-3 py-2 text-ink-2">{h.inApp}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      <div>
-        <h4 className="label">How ASTRA-MED works</h4>
-        <ol className="mt-2 grid gap-3 md:grid-cols-3">
-          {steps.map((s, i) => (
-            <li key={s.title} className="rounded-tile border border-line p-3">
-              <p className="flex items-center gap-2 font-cond text-md font-bold text-ink">
-                <span className="num flex h-6 w-6 items-center justify-center rounded-badge border border-cyan/60 text-xs text-cyan">{i + 1}</span>
-                {s.title}
-              </p>
-              <p className="mt-1.5 text-sm text-ink-2">{s.text}</p>
-            </li>
-          ))}
-        </ol>
-      </div>
-
-      <div>
-        <h4 className="label">Real NASA data and references</h4>
-        <ul className="mt-2 space-y-2 text-sm">
-          <li className="rounded-tile border border-line p-3">
-            <span className="font-semibold text-ink">Live: NASA DONKI space weather.</span>{" "}
-            <span className="text-ink-2">Flares, solar energetic particle events, CMEs and notifications from the CCMC DONKI API and api.nasa.gov, labelled LIVE only after a successful request in this session. Environmental context; never a personal dose.</span>
-          </li>
-          <li className="rounded-tile border border-line p-3">
-            <span className="font-semibold text-ink">Forecast: NASA WSA-ENLIL CME arrivals.</span>{" "}
-            <span className="text-ink-2">Model-predicted arrival times of coronal mass ejections at Mars and Earth, from CCMC model runs published in DONKI. Mars stands in for the Ares transit. Shown as a forecast, never as a dose.</span>
-          </li>
-          <li className="rounded-tile border border-line p-3">
-            <span className="font-semibold text-ink">Computed: Earth–Mars signal delay.</span>{" "}
-            <span className="text-ink-2">From the NASA JPL Keplerian elements for approximate planet positions, computed in the browser with no network.</span>
-          </li>
-          <li className="rounded-tile border border-line p-3">
-            <span className="font-semibold text-ink">Partner agency: Canadian Space Agency.</span>{" "}
-            <span className="text-ink-2">CSA&apos;s radiation pages explain why personal exposure needs on-board dosimetry (its CANS neutron spectrometer; neutrons are about 30% of ISS radiation) and why a large solar particle event is the case that calls for shelter.</span>
-          </li>
-          <li className="rounded-tile border border-line p-3">
-            <span className="font-semibold text-ink">Reference: NASA Human Research Program.</span>{" "}
-            <span className="text-ink-2">Spaceflight Standard Measures and the HRP risk pages for SANS, sleep and schedules, and cardiorespiratory and musculoskeletal fitness give the scientific context shown with each recommendation.</span>
-          </li>
-          <li className="rounded-tile border border-line p-3">
-            <span className="font-semibold text-ink">Research review: NASA OSDR studies</span>{" "}
-            <span className="num text-ink">OSD-817, OSD-987, OSD-989, OSD-1018</span>
-            <span className="text-ink-2">, checked against OSDR metadata. They inform the research context only and do not validate any ASTRA-MED threshold.</span>
-          </li>
-        </ul>
-        <button type="button" className="link mt-2 text-sm" onClick={() => openSources("sources")}>
-          See every source and what it is used for
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => {
+            closeSources();
+            startTour();
+          }}
+        >
+          <Compass aria-hidden="true" className="h-4 w-4" />
+          Take the 1-minute tour
         </button>
+
+        <div className="space-y-2 text-base text-ink">
+          <p>On the way to Mars, a message to Earth takes minutes to arrive, and a reply twice as long. So the crew checks health on board first.</p>
+          <p>You log vitals, sleep, mood and exercise. Each reading is marked NOMINAL, CAUTION or CRITICAL, with the rule behind it.</p>
+        </div>
+
+        <div className="rounded-tile border border-line p-4">
+          <h4 className="text-base font-semibold text-ink">Before you start</h4>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5 text-base text-ink-2">
+            <li>
+              Demo readings are <ProvenanceTag kind="SYNTHETIC" />. They are not real astronaut data.
+            </li>
+            <li>Thresholds are prototype values, not NASA flight rules.</li>
+            <li>Your health data stays in this browser.</li>
+            <li>It works offline. NASA space-weather data loads when you are online.</li>
+            <li>It does not diagnose or prescribe treatment.</li>
+          </ul>
+        </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="rounded-tile border border-line p-3">
-          <h4 className="label">Three-scenario demo</h4>
+      <aside aria-label="At a glance" className="space-y-3">
+        <div className="rounded-tile border border-line bg-raised p-4">
+          <p className="text-sm text-ink-2">Ship to Earth signal, mission day {day}</p>
+          <p className="num mt-1 text-4xl font-semibold text-cyan">
+            {shown.value}
+            <span className="ml-1.5 text-base font-normal text-ink-2">{shown.unit} one way</span>
+          </p>
           <p className="mt-1 text-sm text-ink-2">
-            A, nominal mission (day 42). B, cardiovascular caution (day 118). C, simulated solar particle event (days 130–134). Mission day 1 is a fictional demo epoch; day N spans MET (N−1)/00:00 to 23:59 ship time (UTC).
+            A reply takes about <span className="num text-ink">{reply.value}</span> {reply.unit}. Near zero at launch, longer as the ship nears Mars.
           </p>
         </div>
-        <div className="rounded-tile border border-line p-3">
-          <h4 className="label">Readiness score</h4>
-          <p className="mt-1 text-sm text-ink-2">
-            Engagement indicator for the countermeasure plan: 50 points for today&apos;s tasks, 20 for 7-day adherence, 15 for follow-ups done and 15 for fresh measurements. Select the score in the top bar to see today&apos;s parts. Not a medical clearance; it never hides a CAUTION or CRITICAL.
-          </p>
-        </div>
-      </div>
 
-      <div className="rounded-tile border border-caution/45 bg-caution/[0.06] p-4">
-        <h4 className="label text-caution">Limitations</h4>
-        <p className="mt-1 text-base text-ink">{LIMITATIONS_STATEMENT}</p>
-      </div>
+        <div className="rounded-tile border border-line bg-raised p-4">
+          <h4 className="text-base font-semibold text-ink">What the statuses mean</h4>
+          <ul className="mt-3 space-y-3">
+            {STATUS_KEY.map((k) => (
+              <li key={k.status} className="flex flex-col gap-1">
+                <StatusBadge status={k.status} className="self-start" />
+                <span className="text-sm text-ink-2">{k.meaning}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
+        <nav aria-label="More in this window" className="flex flex-col gap-2 rounded-tile border border-line bg-raised p-4">
+          <button type="button" className="btn btn-secondary min-h-[44px] justify-start" onClick={() => openSources("thresholds")}>
+            <SlidersHorizontal aria-hidden="true" className="h-4 w-4" />
+            Change limits
+          </button>
+          <button type="button" className="btn btn-secondary min-h-[44px] justify-start" onClick={() => openSources("sources")}>
+            <ExternalLink aria-hidden="true" className="h-4 w-4" />
+            See all data sources
+          </button>
+        </nav>
+      </aside>
     </div>
   );
 }
@@ -270,69 +163,246 @@ function Sources() {
       <div className="rounded-tile border border-line p-3 text-sm text-ink-2">
         <p>
           <span className="font-semibold text-ink">Offline DONKI archive: </span>
-          real archived records from {ARCHIVE_PROVENANCE.window.start} to {ARCHIVE_PROVENANCE.window.end}, retrieved from {ARCHIVE_PROVENANCE.source}. Always labelled ARCHIVED (offline fallback), never live.
+          real archived records from {ARCHIVE_PROVENANCE.window.start} to {ARCHIVE_PROVENANCE.window.end}, retrieved from {ARCHIVE_PROVENANCE.source}. Always labelled ARCHIVED (offline fallback),
+          never live.
         </p>
       </div>
     </div>
   );
 }
 
-function Thresholds() {
-  const settings = useMissionState((s) => s.settings);
-  const rows = describeThresholds(settings.aredTargetMinutes, settings.hydrationTargetLiters);
+const pct = (v: number, min: number, max: number) => `${((v - min) / (max - min)) * 100}%`;
+const fmtStep = (v: number, step: number) => (step < 1 ? v.toFixed(1) : String(v));
+
+/** A limit card: name, current value, the slider and its ends, one line of context. */
+function LimitCard(props: { title: string; value: string; unit: string; hint: ReactNode; children: ReactNode }) {
   return (
-    <div>
-      <p className="max-w-[72ch] text-sm text-ink-2">
-        Prototype demonstration assumptions, kept in <code className="num text-ink">src/config/thresholds.ts</code>. They are not official NASA flight rules or validated clinical standards. A real deployment needs review and approval by qualified aerospace-medicine personnel.
-      </p>
-      <div className="mt-3 overflow-x-auto rounded-tile border border-line">
-        <table className="w-full min-w-[720px] border-collapse text-left text-sm">
-          <caption className="sr-only">Configured reference ranges and status rules</caption>
-          <thead className="bg-panel">
-            <tr>
-              {["Indicator", "Reference", "CAUTION", "CRITICAL", "Provenance"].map((h) => (
-                <th key={h} scope="col" className="label border-b border-line px-3 py-2 font-semibold">
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.indicator} className="border-b border-line align-top last:border-b-0">
-                <th scope="row" className="px-3 py-2 font-semibold text-ink">
-                  {r.indicator}
-                  {r.note ? <p className="mt-0.5 text-xs font-normal text-ink-3">{r.note}</p> : null}
-                </th>
-                <td className="num px-3 py-2 text-ink-2">{r.reference}</td>
-                <td className="num px-3 py-2 text-caution">{r.caution}</td>
-                <td className="num px-3 py-2 text-critical">{r.critical}</td>
-                <td className="px-3 py-2">
-                  <ProvenanceTag kind={PROV_TAG[r.provenance]} />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <div className="flex flex-col rounded-tile border border-line bg-raised px-4 pb-3 pt-4">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <h5 className="text-base font-semibold text-ink">{props.title}</h5>
+        <p className="num whitespace-nowrap text-xl font-semibold text-cyan sm:text-2xl">
+          {props.value}
+          <span className="ml-1 text-sm font-normal text-ink-2">{props.unit}</span>
+        </p>
       </div>
-      <p className="mt-2 text-xs text-ink-3">Stale data: each metric is flagged CAUTION when its latest reading is older than its configured window (2 days for daily vitals, 3 for glucose, 5 for PVT, 10 for the symptom check).</p>
+      {props.children}
+      <p className="mt-1 text-sm text-ink-2">{props.hint}</p>
+    </div>
+  );
+}
+
+function Ends({ min, max }: { min: number; max: number }) {
+  return (
+    <div className="num -mt-1 flex justify-between text-xs text-ink-3" aria-hidden="true">
+      <span>{min}</span>
+      <span>{max}</span>
+    </div>
+  );
+}
+
+/** One thumb. It only sets a value; the engine decides what the value means. */
+function LimitSlider(props: { label: string; value: number; min: number; max: number; step: number; unit: string; onChange: (v: number) => void }) {
+  const { label, value, min, max, step, unit, onChange } = props;
+  return (
+    <>
+      <input
+        type="range"
+        aria-label={label}
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="range"
+        style={{ "--pct": pct(value, min, max) } as CSSProperties}
+        aria-valuetext={`${fmtStep(value, step)} ${unit}`}
+      />
+      <Ends min={min} max={max} />
+    </>
+  );
+}
+
+/** Two thumbs on one track for a band: green between them, amber outside. */
+function BandSlider(props: { label: string; lo: number; hi: number; min: number; max: number; step: number; gap: number; unit: string; onChange: (lo: number, hi: number) => void }) {
+  const { label, lo, hi, min, max, step, gap, unit, onChange } = props;
+  return (
+    <>
+      <div className="relative h-11">
+        <div className="absolute inset-x-0 top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-caution/50" aria-hidden="true">
+          <div className="absolute inset-y-0 rounded-full bg-nominal" style={{ left: pct(lo, min, max), right: `calc(100% - ${pct(hi, min, max)})` }} />
+        </div>
+        <input
+          type="range"
+          aria-label={`${label}, fastest`}
+          min={min}
+          max={max}
+          step={step}
+          value={lo}
+          onChange={(e) => onChange(Math.min(Number(e.target.value), hi - gap), hi)}
+          className="range range-overlay"
+          aria-valuetext={`${lo} ${unit}`}
+        />
+        <input
+          type="range"
+          aria-label={`${label}, slowest`}
+          min={min}
+          max={max}
+          step={step}
+          value={hi}
+          onChange={(e) => onChange(lo, Math.max(Number(e.target.value), lo + gap))}
+          className="range range-overlay"
+          aria-valuetext={`${hi} ${unit}`}
+        />
+      </div>
+      <Ends min={min} max={max} />
+    </>
+  );
+}
+
+const ADJUSTABLE = new Set(["Cumulative radiation", "PVT reaction time", "ARED resistive exercise", "Hydration"]);
+
+function Thresholds() {
+  const store = useMissionStore();
+  const settings = useMissionState((s) => s.settings);
+  const uid = useId();
+  const [note, setNote] = useState<string | null>(null);
+  const set = (patch: Parameters<typeof store.updateLimits>[0]) => {
+    const r = store.updateLimits(patch);
+    setNote(r.persisted ? "Saved. Readings rechecked." : "Not saved: this browser is not storing data.");
+  };
+  const radiationRange = rangeText(gaugeTracks("radiation", settings.aredTargetMinutes, settings.hydrationTargetLiters, settings), "mSv");
+  const fixed = describeThresholds(settings).filter((r) => !ADJUSTABLE.has(r.indicator));
+  const { ared, hyd } = { ared: PLAN_SLIDERS.aredMinutes, hyd: PLAN_SLIDERS.hydrationLiters };
+  return (
+    <div className="space-y-6">
+      <section aria-labelledby={`${uid}-adj`} className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h4 id={`${uid}-adj`} className="text-lg font-semibold text-ink">
+              Limits you can change
+            </h4>
+            <p className="text-sm text-ink-2">Prototype limits, not NASA flight rules. Changes save on this device.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <p role="status" className="text-sm text-nominal">
+              {note}
+            </p>
+            <button
+              type="button"
+              className="btn btn-secondary min-h-[44px]"
+              onClick={() =>
+                set({
+                  radiationLimitMsv: RADIATION.limit.default,
+                  pvtMinMs: PVT.range.min,
+                  pvtMaxMs: PVT.range.max,
+                  aredTargetMinutes: ARED.defaultTargetMinutes,
+                  hydrationTargetLiters: HYDRATION.defaultTargetLiters,
+                })
+              }
+            >
+              <RotateCcw aria-hidden="true" className="h-4 w-4" />
+              Reset
+            </button>
+          </div>
+        </div>
+        <div className="grid gap-3 md:grid-cols-2">
+          <LimitCard
+            title="Radiation dose limit"
+            value={String(settings.radiationLimitMsv)}
+            unit="mSv"
+            hint={
+              <>
+                In range <span className="num text-nominal">{radiationRange}</span>. CAUTION from {Math.round(RADIATION.cautionFraction * 100)}%, CRITICAL at the limit.
+              </>
+            }
+          >
+            <LimitSlider label="Radiation dose limit" value={settings.radiationLimitMsv} {...RADIATION.limit} unit="mSv" onChange={(v) => set({ radiationLimitMsv: v })} />
+          </LimitCard>
+          <LimitCard
+            title="PVT reaction time"
+            value={`${settings.pvtMinMs}–${settings.pvtMaxMs}`}
+            unit="ms"
+            hint="In range between the two handles. Faster or slower is CAUTION."
+          >
+            <BandSlider
+              label="PVT reaction time"
+              lo={settings.pvtMinMs}
+              hi={settings.pvtMaxMs}
+              {...PVT.sliderBounds}
+              gap={10}
+              unit="ms"
+              onChange={(lo, hi) => set({ pvtMinMs: lo, pvtMaxMs: hi })}
+            />
+          </LimitCard>
+          <LimitCard title="Strength exercise target" value={String(settings.aredTargetMinutes)} unit="min" hint="Below the target is CAUTION.">
+            <LimitSlider label="Strength exercise target" value={settings.aredTargetMinutes} {...ared} unit="min" onChange={(v) => set({ aredTargetMinutes: v })} />
+          </LimitCard>
+          <LimitCard title="Fluids target" value={settings.hydrationTargetLiters.toFixed(1)} unit="L" hint={`Below the target ${HYDRATION.cautionPersistenceDays} days running is CAUTION.`}>
+            <LimitSlider label="Fluids target" value={settings.hydrationTargetLiters} {...hyd} unit="L" onChange={(v) => set({ hydrationTargetLiters: Math.round(v * 10) / 10 })} />
+          </LimitCard>
+        </div>
+      </section>
+
+      <section aria-labelledby={`${uid}-fixed`} className="space-y-3">
+        <h4 id={`${uid}-fixed`} className="text-lg font-semibold text-ink">
+          Fixed limits
+        </h4>
+        <ul className="grid gap-3 md:grid-cols-2">
+          {fixed.map((r) => (
+            <li key={r.indicator} className="flex flex-col gap-1.5 rounded-tile border border-line px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <span className="text-base font-semibold text-ink">{r.indicator}</span>
+                <ProvenanceTag kind={PROV_TAG[r.provenance]} />
+              </div>
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-sm">
+                <dt className="text-ink-2">In range</dt>
+                <dd className="num text-nominal">{r.reference}</dd>
+                <dt className="text-ink-2">CAUTION</dt>
+                <dd className="num text-caution">{r.caution}</dd>
+                <dt className="text-ink-2">CRITICAL</dt>
+                <dd className="num text-critical">{r.critical}</dd>
+              </dl>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <p className="text-sm text-ink-3">{LIMITATIONS_STATEMENT}</p>
     </div>
   );
 }
 
 function Labels() {
-  const kinds: Provenance[] = ["SYNTHETIC", "MANUAL", "TUESDAY", "DEVICE", "SIM DEVICE", "LIVE", "PARTIAL", "CACHED", "ARCHIVED", "UNAVAILABLE", "SCENARIO", "SUPPLIED PROTOTYPE", "ASTRA ASSUMPTION", "MISSION PLAN"];
+  const kinds: Provenance[] = [
+    "SYNTHETIC",
+    "MANUAL",
+    "TUESDAY",
+    "DEVICE",
+    "SIM DEVICE",
+    "LIVE",
+    "PARTIAL",
+    "CACHED",
+    "ARCHIVED",
+    "UNAVAILABLE",
+    "SCENARIO",
+    "SUPPLIED PROTOTYPE",
+    "ASTRA ASSUMPTION",
+    "MISSION PLAN",
+  ];
   return (
-    <dl className="divide-y divide-line rounded-tile border border-line">
-      {kinds.map((k) => (
-        <div key={k} className="flex flex-col gap-1 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-4">
-          <dt className="w-44 shrink-0">
-            <ProvenanceTag kind={k} label={k === "PARTIAL" ? "PARTIAL LIVE" : k} />
-          </dt>
-          <dd className="text-sm text-ink-2">{PROVENANCE_DESCRIPTIONS[k]}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="space-y-3">
+      <p className="text-sm text-ink-2">Demo scenarios: A, nominal (day 42). B, heart and blood pressure caution (day 118). C, simulated solar particle event (days 130–134).</p>
+      <dl className="divide-y divide-line rounded-tile border border-line">
+        {kinds.map((k) => (
+          <div key={k} className="flex flex-col gap-1 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-4">
+            <dt className="w-44 shrink-0">
+              <ProvenanceTag kind={k} label={k === "PARTIAL" ? "PARTIAL LIVE" : k} />
+            </dt>
+            <dd className="text-sm text-ink-2">{PROVENANCE_DESCRIPTIONS[k]}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
@@ -340,32 +410,18 @@ function StorageSettings() {
   const store = useMissionStore();
   const toast = useToast();
   const storage = useMissionState((s) => s.storage);
-  const settings = useMissionState((s) => s.settings);
   const measurementCount = useMissionState((s) => s.measurements.length);
-  const uid = useId();
-  const [ared, setAred] = useState(String(settings.aredTargetMinutes));
-  const [hyd, setHyd] = useState(String(settings.hydrationTargetLiters));
-  const [error, setError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
-
-  useEffect(() => {
-    setAred(String(settings.aredTargetMinutes));
-    setHyd(String(settings.hydrationTargetLiters));
-  }, [settings.aredTargetMinutes, settings.hydrationTargetLiters]);
-
-  const save = (e: FormEvent) => {
-    e.preventDefault();
-    const a = Number(ared);
-    const h = Number(hyd.replace(",", "."));
-    if (!Number.isInteger(a) || a < 10 || a > 180) return setError("ARED target must be a whole number of minutes from 10 to 180.");
-    if (!Number.isFinite(h) || h < 0.5 || h > 5) return setError("Hydration target must be between 0.5 and 5.0 litres.");
-    setError(null);
-    const r = store.updatePlanTargets(a, Math.round(h * 10) / 10);
-    toast({ tone: r.persisted ? "success" : "warning", title: r.message, body: "Countermeasure targets and ARED/hydration rules now use these values." });
-  };
 
   return (
     <div className="space-y-5">
+      <div className="rounded-tile border border-line p-3">
+        <h4 className="text-base font-semibold text-ink">Local voice setup (optional)</h4>
+        <p className="mt-1 text-sm text-ink-2">Tuesday hears and speaks with local Whisper, Ollama and Kokoro on this Mac. Audio and health data stay on this device.</p>
+        <pre className="mt-2 overflow-x-auto rounded-tile border border-line bg-space p-3 font-mono text-xs text-ink-2">
+          <code>{`# One-time macOS setup\nbrew install whisper-cpp ffmpeg ollama python@3.12 espeak-ng\nnpm run voice:setup\nnpm run voice:setup:kokoro\n\n# Terminal 1\nnpm run dev\n\n# Terminal 2\nnpm run voice:local`}</code>
+        </pre>
+      </div>
       <div className="flex items-start gap-3 rounded-tile border border-line p-3">
         {storage.available ? <HardDrive aria-hidden="true" className="mt-0.5 h-4 w-4 text-nominal" /> : <DatabaseZap aria-hidden="true" className="mt-0.5 h-4 w-4 text-caution" />}
         <div className="text-sm">
@@ -380,40 +436,6 @@ function StorageSettings() {
         </div>
       </div>
 
-      <form onSubmit={save} noValidate className="rounded-tile border border-line p-3">
-        <h3 className="label">Mission plan targets</h3>
-        <p className="mt-1 text-sm text-ink-2">Demo values. A mission protocol sets these per crew member. ASTRA-MED never changes them on its own.</p>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          <div>
-            <label htmlFor={`${uid}-ared`} className="label">
-              ARED daily target
-            </label>
-            <div className="mt-1 flex items-center gap-2">
-              <input id={`${uid}-ared`} name="aredTarget" inputMode="numeric" autoComplete="off" className="field num" value={ared} onChange={(e) => setAred(e.target.value)} />
-              <span className="num text-sm text-ink-2">min</span>
-            </div>
-            <p className="mt-1 text-xs text-ink-3">Default {ARED.defaultTargetMinutes} min (demo task only).</p>
-          </div>
-          <div>
-            <label htmlFor={`${uid}-hyd`} className="label">
-              Hydration daily plan
-            </label>
-            <div className="mt-1 flex items-center gap-2">
-              <input id={`${uid}-hyd`} name="hydrationTarget" inputMode="decimal" autoComplete="off" className="field num" value={hyd} onChange={(e) => setHyd(e.target.value)} />
-              <span className="num text-sm text-ink-2">L</span>
-            </div>
-            <p className="mt-1 text-xs text-ink-3">Default {HYDRATION.defaultTargetLiters.toFixed(1)} L (demo plan).</p>
-          </div>
-        </div>
-        {error ? (
-          <p role="alert" className="mt-2 text-sm text-[#ff8aa0]">
-            {error}
-          </p>
-        ) : null}
-        <button type="submit" className="btn btn-secondary mt-3">
-          Save targets
-        </button>
-      </form>
 
       <div className="rounded-tile border border-line p-3">
         <h3 className="label flex items-center gap-1.5">
@@ -421,13 +443,17 @@ function StorageSettings() {
           NASA API key
         </h3>
         <p className="mt-1 text-sm text-ink-2">
-          {usingDemoKey() ? "Using DEMO_KEY, which NASA rate-limits heavily." : "Using the key from VITE_NASA_API_KEY."} Vite bundles every VITE_ variable into the page, so any key set there is visible to users and is not a secret. Put a personal key in <code className="num">.env.local</code> and never commit it.
+          {usingDemoKey() ? "Using DEMO_KEY, which NASA rate-limits heavily." : "Using the key from VITE_NASA_API_KEY."} Vite bundles every VITE_ variable into the page, so any key set there is
+          visible to users and is not a secret. Put a personal key in <code className="num">.env.local</code> and never commit it.
         </p>
       </div>
 
       <div className="rounded-tile border border-critical/40 p-3">
         <h3 className="label text-critical">Reset demo data</h3>
-        <p className="mt-1 text-sm text-ink-2">Removes every logged measurement, task record, follow-up and setting from this browser and restores the bundled baseline (scenario A, day {MISSION.defaultDay}). Cached space-weather events are kept. This cannot be undone.</p>
+        <p className="mt-1 text-sm text-ink-2">
+          Removes every logged measurement, task record, follow-up and setting from this browser and restores the bundled baseline (scenario A, day {MISSION.defaultDay}). Cached space-weather events
+          are kept. This cannot be undone.
+        </p>
         {!confirming ? (
           <button type="button" className="btn btn-danger mt-3" onClick={() => setConfirming(true)}>
             <RotateCcw aria-hidden="true" className="h-4 w-4" />
@@ -435,7 +461,10 @@ function StorageSettings() {
           </button>
         ) : (
           <div className="mt-3 flex flex-wrap items-center gap-2" role="alertdialog" aria-label="Confirm reset">
-            <p className="w-full text-sm font-semibold text-ink">Delete {measurementCount} logged measurement{measurementCount === 1 ? "" : "s"} and all task progress?</p>
+            <p className="w-full text-sm font-semibold text-ink">
+              Delete {measurementCount} logged measurement
+              {measurementCount === 1 ? "" : "s"} and all task progress?
+            </p>
             <button
               type="button"
               className="btn btn-danger"
@@ -443,7 +472,11 @@ function StorageSettings() {
               onClick={() => {
                 const r = store.resetDemoData();
                 setConfirming(false);
-                toast({ tone: r.persisted ? "success" : "warning", title: r.message, body: "Scenario A, mission day 42." });
+                toast({
+                  tone: r.persisted ? "success" : "warning",
+                  title: r.message,
+                  body: "Scenario A, mission day 42.",
+                });
               }}
             >
               Yes, reset demo data
@@ -461,13 +494,9 @@ function StorageSettings() {
 export function DataSourcesModal() {
   const { sourcesTab } = useUiState();
   const { closeSources, openSources } = useUiActions();
-  const { startTour } = useOnboarding();
   const tab = sourcesTab ?? "about";
-  // Closing the Overview tab starts the spotlight tour, so a first-time viewer goes straight into the guided walk-through.
-  const close = () => {
-    closeSources();
-    if (tab === "about") startTour();
-  };
+  // Closing never starts the tour by itself; "Take the 1-minute tour" does.
+  const close = closeSources;
   return (
     <Dialog open={sourcesTab !== null} onClose={close} title="Overview and data sources" labelId="sources-title" widthClass="max-w-4xl">
       <div className="sticky top-0 z-10 border-b border-line bg-raised px-5 pt-2">

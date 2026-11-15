@@ -1,9 +1,8 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ArrowLeft, CheckCheck, ChevronLeft, ChevronRight, FileText, Inbox, RadioTower, Send, Stethoscope, WifiOff } from "lucide-react";
 import { STATUS_COLOR, STATUS_TEXT_CLASS } from "../../config/theme";
 import { METRIC_GUIDANCE } from "../../data/metricGuidance";
 import { hazardMap } from "../../engine/hazardMap";
-import { earthMarsLightMinutes } from "../../engine/lightTime";
 import { useMissionModel } from "../../hooks/useMissionModel";
 import { useMissionStore } from "../../hooks/useMissionState";
 import { useToast } from "../../hooks/useToast";
@@ -11,7 +10,7 @@ import { useTuesday } from "../../hooks/useTuesday";
 import { goToView } from "../../hooks/useView";
 import { wellbeingSummary } from "../../state/tuesdayStore";
 import { ALL_METRIC_IDS, type HealthStatus, type MetricId } from "../../types/health";
-import { formatReadingStamp, padDay } from "../../utils/dates";
+import { formatReadingDate, missionSignalMinutes, padDay } from "../../utils/dates";
 import { formatWithUnit } from "../../utils/formatting";
 import { StatusBadge, StatusIcon } from "../shared/StatusBadge";
 import { SurgeonReportDialog } from "../SurgeonReportDialog";
@@ -234,7 +233,7 @@ function IndicatorTable() {
                 <td className="num py-1.5 pr-3 text-xs text-ink-2">{d.triggeredRules[0]?.threshold ?? "inside range"}</td>
                 <td className="num py-1.5 pr-3 text-ink-2">{d.status === "NOMINAL" ? "" : d.persistenceDays}</td>
                 <td className="num py-1.5 text-xs text-ink-2">
-                  {d.latest ? `${formatReadingStamp(d.latest.missionDay, d.latest.recordedAt)}${d.latest.source === "manual" || d.latest.source === "tuesday" ? " crew" : ""}` : ""}
+                  {d.latest ? `${formatReadingDate(d.latest.missionDay, d.latest.recordedAt)}${d.latest.source === "manual" || d.latest.source === "tuesday" ? " crew" : ""}` : ""}
                 </td>
               </tr>
             ))}
@@ -256,7 +255,7 @@ function HazardsAndWellbeing() {
     advisories: m.advisories,
     drift: m.drift,
     linkUp,
-    signalDelayMinutes: earthMarsLightMinutes(new Date()),
+    signalDelayMinutes: missionSignalMinutes(m.day),
     queuedMessages: data.outbox.length,
     checkInsThisWeek: week.checkIns,
     rechargeMinutesThisWeek: week.rechargeMinutes,
@@ -307,7 +306,7 @@ export function MedicalOfficerDashboard() {
   const store = useMissionStore();
   const { linkUp, simulatedLos, setSimulatedLos } = useTuesday();
   const [reportOpen, setReportOpen] = useState(false);
-  const delay = useMemo(() => earthMarsLightMinutes(new Date()), []);
+  const delay = missionSignalMinutes(m.day);
   const counts = m.overall.counts;
 
   return (
@@ -379,7 +378,7 @@ export function MedicalOfficerDashboard() {
               Readiness <span className="num text-ink">{m.readiness.score}</span>/100
               {m.lastReading ? (
                 <>
-                  , last check <span className="num text-ink">{formatReadingStamp(m.lastReading.missionDay, m.lastReading.recordedAt)}</span>
+                  , last check <span className="num text-ink">{formatReadingDate(m.lastReading.missionDay, m.lastReading.recordedAt)}</span>
                 </>
               ) : null}
             </p>

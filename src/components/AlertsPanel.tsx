@@ -70,7 +70,7 @@ export function AlertsPanel() {
 
   return (
     <Panel id="alerts" title="Alerts and health events" subtitle="Each alert answers what changed, why it matters in space and what to do next.">
-      <h3 className="label">Active alerts, day {padDay(day)}</h3>
+      <h3 className="text-base font-semibold text-ink">Active alerts, day {padDay(day)}</h3>
       {alerts.length === 0 && activeAdvisories.length === 0 ? (
         <div className="mt-2 flex items-start gap-2 rounded-tile border border-nominal/35 px-3 py-3">
           <CircleCheck aria-hidden="true" className="mt-0.5 h-4 w-4 text-nominal" />
@@ -137,7 +137,7 @@ export function AlertsPanel() {
         </ul>
       )}
 
-      <h3 className="label mt-5">Recent health events, last {LOOKBACK} days</h3>
+      <h3 className="mt-5 text-base font-semibold text-ink">Recent health events, last {LOOKBACK} days</h3>
       {timeline.length === 0 ? (
         <p className="mt-2 text-sm text-ink-2">No status changes, entries or scenario events in the last {LOOKBACK} days.</p>
       ) : (

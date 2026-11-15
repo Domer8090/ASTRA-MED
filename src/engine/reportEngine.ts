@@ -64,7 +64,7 @@ export function buildSurgeonReport(i: ReportInput): string {
     `Scenario: ${i.scenario.code}, ${i.scenario.name}.`,
     `Data: ${crewEntered ? "synthetic demo telemetry plus crew-entered readings (manual and Tuesday voice)" : "SYNTHETIC demo telemetry, not real astronaut data"}.`,
     "Thresholds are prototype demonstration ranges, not NASA flight rules.",
-    `Earth–Mars one-way signal delay today: ${i.signalDelayMinutes.toFixed(1)} min.`,
+    `Ship–Earth one-way signal delay on this mission day: ${i.signalDelayMinutes.toFixed(1)} min.`,
     "",
     `OVERALL STATUS: ${i.overall.status} (${i.overall.counts.NOMINAL} nominal, ${i.overall.counts.CAUTION} caution, ${i.overall.counts.CRITICAL} critical)`,
     "",
