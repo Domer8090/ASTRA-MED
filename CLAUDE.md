@@ -22,7 +22,18 @@ npm run preview    # serve dist/ (service worker active here only)
 npm run donki:check      # live per-endpoint DONKI check (both hosts)
 npm run qa:screenshots   # CDP screenshots of every major view into docs/qa (needs preview running)
 npm run assets:fetch     # NASA Earth textures and the hand-tracking model into public/ (offline Recharge deck)
+npm run core:build       # engines-only bundle (dist-core/astra-core.js), copied into the iPad app
+npm run desktop:dist:win # Windows installers (Electron); desktop:dist:linux for Linux
 ```
+
+Other hosts (see `docs/INTEGRATION.md`): `desktop/` (Electron shell),
+`ios/AstraMed.xcodeproj` (SwiftUI iPad app running the core bundle in
+JavaScriptCore), `integrations/cli/astra-core.mjs`. After changing anything the
+engines use, run `npm run core:build` so the iPad copy stays current (CI checks
+it). Native views never contain thresholds or guidance text; they display what
+the core returns. On the FAT32 drive, build Electron output and Xcode
+DerivedData on the internal disk, and run `dot_clean -m ios` before
+`xcodebuild`.
 
 ## Non-negotiable product rules
 

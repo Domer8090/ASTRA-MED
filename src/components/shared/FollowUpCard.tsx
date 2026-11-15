@@ -5,6 +5,7 @@ import { useUiActions } from "../../hooks/useUi";
 import type { BodySystemId, FollowUpAction } from "../../types/health";
 import { formatLocalDateTime } from "../../utils/dates";
 import { BasisLine } from "./BasisLine";
+import { InfoTip } from "./InfoTip";
 import { StatusBadge } from "./StatusBadge";
 
 interface Props {
@@ -32,8 +33,10 @@ export function FollowUpCard({ f, day, focusSystem, compact = false }: Props) {
       <div className="flex flex-wrap items-center gap-2">
         {f.kind === "missed-task" ? <span className="chip-tag border-line-strong text-ink-2">Missed task</span> : <StatusBadge status={f.severity} />}
         <p className={`text-sm font-semibold ${f.completed ? "text-ink-2" : "text-ink"}`}>{f.title}</p>
+        <InfoTip label="Why">
+          <p>{f.reason}</p>
+        </InfoTip>
       </div>
-      {!compact ? <p className="mt-1 text-xs text-ink-2">{f.reason}</p> : null}
 
       {f.steps ? (
         <ol className="mt-2 space-y-1.5" aria-label="Ordered steps, highest priority first">
@@ -49,7 +52,7 @@ export function FollowUpCard({ f, day, focusSystem, compact = false }: Props) {
                     aria-checked={s.completed}
                     aria-label={`Step ${i + 1}: ${s.text}`}
                     onClick={() => toggle(s.id, s.completed, s.text)}
-                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] border ${s.completed ? "border-nominal bg-nominal" : "border-line-strong bg-space hover:border-cyan"}`}
+                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-badge border ${s.completed ? "border-nominal bg-nominal" : "border-line-strong bg-space hover:border-cyan"}`}
                   >
                     <svg viewBox="0 0 16 16" className="t-check h-3 w-3" data-checked={s.completed} aria-hidden="true">
                       <path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="#060B14" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -60,7 +63,7 @@ export function FollowUpCard({ f, day, focusSystem, compact = false }: Props) {
                       <span className="num mr-1.5 text-2xs text-ink-3">{i + 1}.</span>
                       {isNext ? <span className="mr-1.5 font-cond text-2xs font-bold tracking-label text-cyan">NEXT</span> : null}
                       {s.text}
-                    </p>
+                      </p>
                     {s.alsoResolves ? <p className="mt-0.5 text-2xs text-caution">Also covers: {s.alsoResolves}</p> : null}
                     {!compact && (relevant || isNext) ? <BasisLine basis={s.basis} /> : null}
                     {s.completed && s.completedAt ? <p className="mt-0.5 text-2xs text-ink-3">Done {formatLocalDateTime(s.completedAt)} (real time)</p> : null}
@@ -75,8 +78,8 @@ export function FollowUpCard({ f, day, focusSystem, compact = false }: Props) {
           <p className="mt-1.5 text-sm text-ink">
             <span className="font-semibold text-cyan">Next: </span>
             {f.action}
+            <BasisLine basis={f.basis} />
           </p>
-          <BasisLine basis={f.basis} />
         </>
       )}
 

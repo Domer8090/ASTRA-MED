@@ -63,7 +63,12 @@ export interface SymptomValue {
 
 export type MeasurementValue = number | BloodPressureValue | SymptomValue;
 
-export type MeasurementSource = "synthetic" | "manual" | "api" | "import";
+/**
+ * Where a reading came from. `device` is a real instrument read over a standard
+ * Bluetooth health profile; `device-sim` is the simulated mission-hardware
+ * bridge (synthetic values, always labelled as simulated).
+ */
+export type MeasurementSource = "synthetic" | "manual" | "tuesday" | "api" | "import" | "device" | "device-sim";
 
 export type GlucoseContext = "fasting" | "post-meal" | "other";
 
@@ -505,3 +510,51 @@ export interface DonkiTypeState {
  * whatever is shown is cached or archived and labelled as such.
  */
 export type SpaceWeatherMode = "LIVE" | "PARTIAL" | "CACHED" | "ARCHIVED" | "UNAVAILABLE";
+
+/* ---------------------------------------------------------------- Auto Sync */
+
+/** Standard Bluetooth SIG health profiles that Auto Sync reads directly. */
+export type BleProfile = "heart_rate" | "health_thermometer" | "blood_pressure" | "glucose";
+
+/**
+ * How a device reaches ASTRA-MED.
+ * - `ble`: real connection through Web Bluetooth using a standard GATT profile.
+ * - `bridge`: mission hardware with a proprietary link. This prototype has no
+ *   access to it, so the bridge is simulated from the synthetic telemetry and
+ *   every reading is labelled SIM DEVICE.
+ */
+export type SyncLink = { kind: "ble"; profile: BleProfile } | { kind: "bridge" };
+
+export type SyncDeviceCategory = "smart-garment" | "watch" | "chest-strap" | "ecg" | "meter" | "dosimeter" | "exercise" | "test";
+
+export interface SyncDeviceSpec {
+  id: string;
+  name: string;
+  /** Short line: what the device is and where it is used. */
+  summary: string;
+  category: SyncDeviceCategory;
+  metrics: readonly MetricId[];
+  link: SyncLink;
+  /** How to put the device into a state where it can connect. */
+  pairingSteps: readonly string[];
+  reference?: { label: string; url: string };
+}
+
+export type SyncInterval = 1 | 5 | 15 | 60;
+
+export interface PairedDevice {
+  deviceId: string;
+  pairedAt: string;
+  autoSync: boolean;
+  /** Last successful save, ISO UTC. */
+  lastSyncAt?: string;
+  /** Bluetooth name the browser reported, when there is one. */
+  hardwareName?: string;
+}
+
+export interface SyncSettings {
+  intervalMinutes: SyncInterval;
+  paired: PairedDevice[];
+  /** Glucose meter record sequence numbers already saved, so a reconnect does not log them twice. */
+  glucoseSeen: number[];
+}

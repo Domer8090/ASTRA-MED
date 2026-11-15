@@ -16,9 +16,11 @@ import { useTuesday } from "../../hooks/useTuesday";
 import { nextArrival } from "../../services/enlilForecast";
 import { scrollToSection } from "../navigation";
 import { TrendChip } from "../shared/TrendChip";
+import { InfoTip } from "../shared/InfoTip";
 import { SurgeonReportDialog } from "../SurgeonReportDialog";
 import { BasisLine } from "../shared/BasisLine";
 import { ProvenanceTag } from "../shared/ProvenanceTag";
+import { provenanceForSource } from "../shared/provenanceForSource";
 import { StatusBadge, StatusIcon } from "../shared/StatusBadge";
 import { useConsoleFocus, useSelectedSystem } from "./useConsoleFocus";
 
@@ -40,33 +42,26 @@ function ScenarioContext() {
   // Nominal mission at its start day needs no banner; the status band says everything.
   if (!story && inStory) return null;
 
+  const explanation = story
+    ? inStory
+      ? `Story active on day ${day}${hazardNow ? `: environmental hazard ${hazardNow.level} (${hazardNow.phase})` : ""}.${scenario.id === "cardiovascular" ? " Heart rate and blood pressure are above their caution limits." : ""} ${scenario.summary}`
+      : `Day ${day} is ${day < story[0] ? "before" : "after"} this scenario's event window (days ${story[0]}–${story[1]}). ${scenario.summary}`
+    : `This scenario's demo starts on day ${scenario.focusDay}. ${scenario.summary}`;
+
   return (
     <div
       role="status"
-      className={`flex flex-wrap items-center gap-x-3 gap-y-1 rounded-tile border px-4 py-2 text-sm ${story && inStory ? "border-caution/50 bg-caution/[0.06]" : "border-line-strong bg-panel"}`}
+      className={`flex flex-wrap items-center gap-x-2 gap-y-1 rounded-tile border px-3 py-1.5 text-sm ${story && inStory ? "border-caution/50" : "border-line"}`}
     >
       <span className="font-cond text-xs font-bold tracking-label text-ink">
         SCENARIO {scenario.code}: {scenario.name.toUpperCase()}
       </span>
-      {story && inStory ? (
-        <span className="text-ink">
-          Story active on day {day}
-          {hazardNow ? `: environmental hazard ${hazardNow.level} (${hazardNow.phase}).` : "."} {scenario.id === "cardiovascular" ? "Heart rate and blood pressure are above their caution limits." : null}
-        </span>
-      ) : (
-        <>
-          <span className="text-ink-2">
-            {story
-              ? day < story[0]
-                ? `Day ${day} is before this scenario's event window (days ${story[0]}–${story[1]}).`
-                : `Day ${day} is after this scenario's event window (days ${story[0]}–${story[1]}).`
-              : `The demo for this scenario starts on day ${scenario.focusDay}. You are viewing day ${day}.`}
-          </span>
-          <button type="button" className="btn btn-primary min-h-[30px] px-2.5 text-xs" onClick={() => store.setSelectedDay(scenario.focusDay)}>
-            Go to day {scenario.focusDay}
-          </button>
-        </>
-      )}
+      <InfoTip label={`Scenario ${scenario.code}`}>{explanation}</InfoTip>
+      {!inStory ? (
+        <button type="button" className="btn btn-primary ml-auto min-h-[30px] px-2.5 text-xs" onClick={() => store.setSelectedDay(scenario.focusDay)}>
+          Go to day {scenario.focusDay}
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -81,14 +76,13 @@ function SignalDelay() {
   const now = useNow(60_000);
   const minutes = earthMarsLightMinutes(now);
   return (
-    <span
-      className="flex items-center gap-1.5"
-      title="One-way radio signal time between Earth and Mars on today's real date, from NASA JPL approximate planetary positions. A question to the ground and its answer take twice this, plus crew and ground response time."
-    >
+    <span className="flex items-center gap-1.5">
       <RadioTower aria-hidden="true" className="h-3.5 w-3.5" />
-      <span className="label">Earth–Mars delay today</span>
+      <span className="label">Signal delay</span>
       <span className="num text-ink">{formatNumber(minutes, 1)} min</span>
-      <span className="text-ink-3">one way</span>
+      <InfoTip label="Signal delay">
+        One-way radio time between Earth and Mars on today&apos;s real date (NASA JPL approximate positions). A question to the ground and its answer take at least twice this.
+      </InfoTip>
     </span>
   );
 }
@@ -162,46 +156,49 @@ export function StatusLine() {
             {needsWatch ? (
               <>
                 <p className="flex flex-wrap items-center gap-2">
-                  <span className="font-cond text-lg font-bold leading-tight text-ink">{BODY_SYSTEMS[priority.id].name}</span>
+                  {shown !== priority.id ? (
+                    <button
+                      type="button"
+                      className="font-cond text-lg font-bold leading-tight text-ink underline decoration-line-strong underline-offset-4 hover:decoration-cyan"
+                      onClick={() => {
+                        followPriority();
+                        focusSystem(priority.id);
+                        followPriority();
+                      }}
+                    >
+                      {BODY_SYSTEMS[priority.id].name}
+                    </button>
+                  ) : (
+                    <span className="font-cond text-lg font-bold leading-tight text-ink">{BODY_SYSTEMS[priority.id].name}</span>
+                  )}
                   <StatusBadge status={watch.status} />
+                  <InfoTip label="Why this system">{watchReason}</InfoTip>
                 </p>
-                <p className="text-sm text-ink-2">{watchReason}</p>
-                {shown !== priority.id ? (
-                  <button
-                    type="button"
-                    className="link self-start text-xs"
-                    onClick={() => {
-                      followPriority();
-                      focusSystem(priority.id);
-                      followPriority();
-                    }}
-                  >
-                    Show {BODY_SYSTEMS[priority.id].shortName.toLowerCase()} on the body map
-                  </button>
-                ) : null}
               </>
             ) : trends[0] ? (
               <>
                 <p className="flex flex-wrap items-center gap-2">
                   <span className="font-cond text-lg font-bold leading-tight text-ink">{BODY_SYSTEMS[METRIC_GUIDANCE[trends[0].metricId].system].name}</span>
                   <TrendChip />
-                </p>
-                <p className="text-sm text-ink-2">
-                  Every indicator is inside its range, but {METRIC_GUIDANCE[trends[0].metricId].name.toLowerCase()} is {trends[0].direction} toward its caution limit: about {trends[0].daysToLimit} {trends[0].daysToLimit === 1 ? "day" : "days"} at the current rate.
+                  <InfoTip label="Trend watch">
+                    Every indicator is inside its range, but {METRIC_GUIDANCE[trends[0].metricId].name.toLowerCase()} is {trends[0].direction} toward its caution limit: about {trends[0].daysToLimit} {trends[0].daysToLimit === 1 ? "day" : "days"} at the current rate. A projection, not a status.
+                  </InfoTip>
                 </p>
               </>
             ) : (
-              <p className="text-md text-ink">All five systems are inside their configured ranges.</p>
+              <p className="text-md text-ink">All five systems in range.</p>
             )}
           </div>
 
           <div className="flex min-w-0 items-start gap-3 bg-raised px-4 py-3 md:col-span-2 xl:col-span-1">
             <div className="min-w-0 flex-1">
-              <p className="label text-cyan">Next action</p>
+              <p className="flex items-center gap-1 label text-cyan">
+                Next action
+                {primaryAction.basis ? <BasisLine basis={primaryAction.basis} /> : null}
+              </p>
               <p className="mt-0.5 line-clamp-3 text-md font-medium text-ink" title={primaryAction.text}>
                 {primaryAction.text}
               </p>
-              {primaryAction.basis ? <BasisLine basis={primaryAction.basis} inline /> : null}
             </div>
             {primaryAction.guidance ? (
               <button type="button" className="btn btn-secondary min-h-[32px] shrink-0 text-xs" onClick={() => primaryAction.guidance && openGuidance(primaryAction.guidance)}>
@@ -217,7 +214,9 @@ export function StatusLine() {
             <span className="flex items-center gap-1.5 text-caution">
               <Radiation aria-hidden="true" className="h-3.5 w-3.5" />
               <span className="font-cond font-semibold tracking-label">HAZARD {activeHazard.level}</span>
-              <span className="text-ink-2">environmental, not personal dose</span>
+              <InfoTip label="Environmental hazard">
+                {activeHazard.title}. {activeHazard.summary} This is the space environment, not a personal dose.
+              </InfoTip>
             </span>
           ) : null}
           <span className="flex items-center gap-1.5">
@@ -228,7 +227,7 @@ export function StatusLine() {
                 <span className="num text-ink" title={`MET ${formatMetStamp(lastReading.recordedAt)}, ship time UTC`}>
                   {formatReadingStamp(lastReading.missionDay, lastReading.recordedAt)}
                 </span>
-                <ProvenanceTag kind={lastReading.source === "synthetic" ? "SYNTHETIC" : "MANUAL"} />
+                <ProvenanceTag kind={provenanceForSource(lastReading.source)} />
               </>
             ) : (
               <span>none</span>

@@ -29,7 +29,8 @@ function StatusHeatmap() {
   const labelW = 132;
   const width = labelW + days * cellW;
   const height = HEAT_ROWS.length * rowH + 18;
-  const counts = m.dayStatus.reduce(
+  // Replay stops at the selected day: later days are not shown or counted.
+  const counts = m.dayStatus.slice(0, m.day).reduce(
     (acc, s) => {
       acc[s]++;
       return acc;
@@ -52,18 +53,20 @@ function StatusHeatmap() {
           {(["NOMINAL", "CAUTION", "CRITICAL"] as const).map((s) => (
             <span key={s} className={`flex items-center gap-1 ${STATUS_TEXT_CLASS[s]}`}>
               <StatusIcon status={s} className="h-3 w-3" />
-              <span className="num">{counts[s]}</span> days {s}
+              <span className="num">{counts[s]}</span> {counts[s] === 1 ? "day" : "days"} {s}
             </span>
           ))}
         </p>
       </div>
-      <p className="mt-1 text-xs text-ink-3">Select a day to review it. The cyan line marks day {m.day}.</p>
+      <p className="mt-1 text-xs text-ink-3">
+        Days 1 to {m.day}. Select a day to review it; the cyan outline marks the selected day and grey cells are days not yet reached.
+      </p>
       <div className="mt-2 overflow-x-auto">
         <svg
           viewBox={`0 0 ${width} ${height}`}
           className="min-w-[760px] cursor-crosshair"
           role="img"
-          aria-label={`${days} mission days: ${counts.NOMINAL} NOMINAL, ${counts.CAUTION} CAUTION, ${counts.CRITICAL} CRITICAL. Selected day ${m.day}.`}
+          aria-label={`Mission days 1 to ${m.day}: ${counts.NOMINAL} NOMINAL, ${counts.CAUTION} CAUTION, ${counts.CRITICAL} CRITICAL. Selected day ${m.day}.`}
           onClick={pick}
         >
           {HEAT_ROWS.map((id, r) => (
@@ -71,15 +74,30 @@ function StatusHeatmap() {
               <text x={0} y={rowH - 4} className="fill-ink-2 font-cond text-[10px]">
                 {METRIC_GUIDANCE[id].shortName}
               </text>
-              {m.metricDayStatus[id].map((s, i) =>
-                s === "NOMINAL" ? null : <rect key={i} x={labelW + i * cellW} y={1} width={cellW - 1} height={rowH - 2} fill={STATUS_COLOR[s]} opacity={s === "CRITICAL" ? 1 : 0.85} />,
-              )}
+              {m.metricDayStatus[id].map((s, i) => (
+                <rect
+                  key={i}
+                  x={labelW + i * cellW}
+                  y={2}
+                  width={cellW - 1}
+                  height={rowH - 4}
+                  className={i < m.day ? undefined : "fill-line"}
+                  fill={i < m.day ? STATUS_COLOR[s] : undefined}
+                  opacity={i >= m.day ? 0.45 : s === "NOMINAL" ? 0.22 : s === "CRITICAL" ? 1 : 0.9}
+                />
+              ))}
               <rect x={labelW} y={rowH - 1} width={days * cellW} height={0.5} className="fill-line" />
             </g>
           ))}
           <rect x={labelW + (m.day - 1) * cellW - 0.5} y={0} width={cellW} height={HEAT_ROWS.length * rowH} fill="none" className="stroke-cyan" strokeWidth={1.2} />
           {[1, 30, 60, 90, 120, 150, 180].filter((d) => d <= days).map((d) => (
-            <text key={d} x={labelW + (d - 1) * cellW} y={height - 4} className="num fill-ink-3 text-[9px]">
+            <text
+              key={d}
+              x={labelW + (d - (d === days ? 0 : 1)) * cellW}
+              y={height - 4}
+              textAnchor={d === 1 ? "start" : d === days ? "end" : "middle"}
+              className="num fill-ink-3 text-[9px]"
+            >
               D{d}
             </text>
           ))}
@@ -111,28 +129,36 @@ function CrewInbox() {
       {messages.length === 0 ? (
         <p className="mt-2 text-sm text-ink-2">No messages. The crew sends them with Contact medical officer in the console or Tuesday.</p>
       ) : (
-        <ul className="mt-2 flex max-h-72 flex-col gap-2 overflow-y-auto pr-1">
-          {messages.map((q) => (
-            <li key={q.id} className={`rounded-tile border px-3 py-2 ${q.reviewed ? "border-line bg-panel" : q.priority === "urgent" ? "border-critical/60 bg-critical/[0.05]" : "border-line-strong bg-raised"}`}>
-              <details>
-                <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-sm text-ink">
+        <ul className="mt-2 flex max-h-[30rem] flex-col gap-2 overflow-y-auto pr-1">
+          {messages.map((q) => {
+            const report = q.text.split("CREW REPORT\n")[1]?.split("\n")[0]?.trim();
+            const written = report && report !== "(nothing written)" ? report : null;
+            return (
+              <li key={q.id} className={`rounded-tile border px-3 py-2 ${q.reviewed ? "border-line bg-panel" : q.priority === "urgent" ? "border-critical/60 bg-critical/[0.05]" : "border-line-strong bg-raised"}`}>
+                <div className="flex flex-wrap items-center gap-2 text-sm text-ink">
                   <span className={`chip-tag ${q.priority === "urgent" ? "border-critical/60 text-critical" : "border-line-strong text-ink-2"}`}>{q.priority}</span>
                   <span className="num text-xs text-ink-2">
-                    Day {q.missionDay}, {new Date(q.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    Day {q.missionDay}, received {new Date(q.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                   </span>
-                  <span className="min-w-0 flex-1 truncate">{q.text.split("CREW REPORT\n")[1]?.split("\n")[0] ?? "Message"}</span>
-                  {q.reviewed ? <span className="chip-tag border-nominal/50 text-nominal">Reviewed</span> : null}
-                </summary>
-                <pre className="num mt-2 max-h-56 overflow-auto whitespace-pre-wrap text-xs text-ink-2">{q.text}</pre>
-                {!q.reviewed ? (
-                  <button type="button" className="btn btn-secondary mt-2 min-h-[30px] px-2 text-xs" onClick={() => store.markReviewed(q.id)}>
-                    <CheckCheck aria-hidden="true" className="h-3.5 w-3.5" />
-                    Mark reviewed
-                  </button>
-                ) : null}
-              </details>
-            </li>
-          ))}
+                  <span className="ml-auto">
+                    {q.reviewed ? (
+                      <span className="chip-tag border-nominal/50 text-nominal">Reviewed</span>
+                    ) : (
+                      <button type="button" className="btn btn-secondary min-h-[30px] px-2 text-xs" onClick={() => store.markReviewed(q.id)}>
+                        <CheckCheck aria-hidden="true" className="h-3.5 w-3.5" />
+                        Mark reviewed
+                      </button>
+                    )}
+                  </span>
+                </div>
+                <p className={`mt-1.5 text-sm ${written ? "text-ink" : "italic text-ink-3"}`}>{written ?? "No crew report written. Console status is attached."}</p>
+                <details className="mt-1">
+                  <summary className="cursor-pointer text-xs font-semibold text-cyan">Full message</summary>
+                  <pre className="num mt-2 whitespace-pre-wrap rounded-tile border border-line bg-space/60 p-2 text-xs text-ink-2">{q.text}</pre>
+                </details>
+              </li>
+            );
+          })}
         </ul>
       )}
       <label className="mt-3 flex flex-col gap-1 text-sm text-ink">
@@ -208,7 +234,7 @@ function IndicatorTable() {
                 <td className="num py-1.5 pr-3 text-xs text-ink-2">{d.triggeredRules[0]?.threshold ?? "inside range"}</td>
                 <td className="num py-1.5 pr-3 text-ink-2">{d.status === "NOMINAL" ? "" : d.persistenceDays}</td>
                 <td className="num py-1.5 text-xs text-ink-2">
-                  {d.latest ? `${formatReadingStamp(d.latest.missionDay, d.latest.recordedAt)}${d.latest.source === "manual" ? " crew" : ""}` : ""}
+                  {d.latest ? `${formatReadingStamp(d.latest.missionDay, d.latest.recordedAt)}${d.latest.source === "manual" || d.latest.source === "tuesday" ? " crew" : ""}` : ""}
                 </td>
               </tr>
             ))}
@@ -328,7 +354,8 @@ export function MedicalOfficerDashboard() {
         <p className="text-xs text-ink-3">
           In flight this view runs at mission control on data received at each contact. In this prototype it reads this browser's data. Synthetic demonstration data and prototype thresholds; not an operational medical system.
         </p>
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.2fr)_minmax(0,1fr)]">
+        <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
+          <div className="flex flex-col gap-3">
           <section aria-labelledby="mo-status" className={`panel border p-4 ${m.overall.status === "CRITICAL" ? "border-critical/60" : m.overall.status === "CAUTION" ? "border-caution/55" : ""}`}>
             <h2 id="mo-status" className="label">
               Crew health, day {padDay(m.day)}
@@ -357,11 +384,12 @@ export function MedicalOfficerDashboard() {
               ) : null}
             </p>
           </section>
+            <EarlyWarnings />
+          </div>
           <CrewInbox />
-          <EarlyWarnings />
         </div>
         <StatusHeatmap />
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
           <IndicatorTable />
           <HazardsAndWellbeing />
         </div>

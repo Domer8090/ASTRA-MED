@@ -1,4 +1,4 @@
-import { BookOpen, ChevronDown, ExternalLink, Plus, Radiation } from "lucide-react";
+import { BookOpen, ChevronDown, Plus, Radiation } from "lucide-react";
 import { BODY_SYSTEMS } from "../../data/bodySystems";
 import { METRIC_GUIDANCE } from "../../data/metricGuidance";
 import { HRP_HAZARDS_URL, hazardsForSystem } from "../../data/spaceflightHazards";
@@ -8,16 +8,16 @@ import { useToast } from "../../hooks/useToast";
 import { useUiActions, useUiState } from "../../hooks/useUi";
 import { STATUS_RANK, type MetricDiagnostic } from "../../types/health";
 import { formatWithUnit } from "../../utils/formatting";
-import { ProvenanceTag } from "../shared/ProvenanceTag";
 import { BasisLine } from "../shared/BasisLine";
 import { FollowUpCard } from "../shared/FollowUpCard";
 import { StatusBadge } from "../shared/StatusBadge";
 import { TrendChip } from "../shared/TrendChip";
+import { InfoTip } from "../shared/InfoTip";
 import { useConsoleFocus, useSelectedSystem } from "./useConsoleFocus";
 
 function CheckMark({ checked }: { checked: boolean }) {
   return (
-    <span aria-hidden="true" className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-[4px] border ${checked ? "border-nominal bg-nominal" : "border-line-strong bg-space"}`}>
+    <span aria-hidden="true" className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-badge border ${checked ? "border-nominal bg-nominal" : "border-line-strong bg-space"}`}>
       <svg viewBox="0 0 16 16" className="t-check h-3 w-3" data-checked={checked}>
         <path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="#060B14" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
@@ -52,36 +52,40 @@ export function SystemIntelPanel() {
       <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0">
           <p className="label">System status</p>
-          <h2 id="intel-title" className="font-cond text-lg font-bold leading-tight text-ink">
+          <h2 id="intel-title" className="flex items-center gap-1 font-cond text-lg font-bold leading-tight text-ink">
             {def.name}
+            <InfoTip label={def.name}>
+              <p>{def.whyItMatters}</p>
+              <p className="text-xs">
+                {mode === "auto" ? `Shown because it is the highest-priority system: ${priority.reason}.` : priority.id === selectedSystem ? "Your selection is also the highest-priority system." : `Your selection. Highest priority now: ${BODY_SYSTEMS[priority.id].shortName.toLowerCase()} (${priority.reason}).`}
+              </p>
+              <p className="text-xs">
+                NASA HRP hazards: {hazardsForSystem(selectedSystem).map((h) => h.name).join(", ")}.{" "}
+                <a href={HRP_HAZARDS_URL} target="_blank" rel="noopener noreferrer" className="link">
+                  Source
+                </a>
+              </p>
+            </InfoTip>
           </h2>
         </div>
         <StatusBadge status={st.status} size="md" />
       </header>
-      <div className="flex flex-wrap items-center gap-2 border-b border-line px-4 py-1.5 text-2xs text-ink-3">
-        {mode === "auto" ? (
-          <span>Showing the highest-priority system: {priority.reason}.</span>
-        ) : priority.id !== selectedSystem ? (
-          <>
-            <span>
-              Your selection. Highest priority now: {BODY_SYSTEMS[priority.id].shortName.toLowerCase()} ({priority.reason}).
-            </span>
-            <button
-              type="button"
-              className="link text-2xs"
-              onClick={() => {
-                followPriority();
-                focusPriority(priority.id);
-                followPriority();
-              }}
-            >
-              Show priority system
-            </button>
-          </>
-        ) : (
-          <span>Your selection is also the highest-priority system.</span>
-        )}
-      </div>
+      {mode !== "auto" && priority.id !== selectedSystem ? (
+        <div className="flex items-center gap-2 border-b border-line px-4 py-1.5 text-xs text-ink-2">
+          <span>Priority: {BODY_SYSTEMS[priority.id].shortName}</span>
+          <button
+            type="button"
+            className="link text-xs"
+            onClick={() => {
+              followPriority();
+              focusPriority(priority.id);
+              followPriority();
+            }}
+          >
+            Show
+          </button>
+        </div>
+      ) : null}
 
       {st.advisories.map((a) => {
         const rel = a.relations.find((r) => r.id === selectedSystem);
@@ -89,22 +93,27 @@ export function SystemIntelPanel() {
           <div key={a.id} className={`mx-4 mt-3 rounded-tile border px-3 py-2 ${a.level === "ALL CLEAR" ? "border-nominal/40" : "border-caution/50 bg-caution/[0.07]"}`}>
             <p className={`flex flex-wrap items-center gap-1.5 font-cond text-xs font-bold uppercase tracking-label ${a.level === "ALL CLEAR" ? "text-nominal" : "text-caution"}`}>
               <Radiation aria-hidden="true" className="h-3.5 w-3.5" />
-              Environmental hazard {a.level}, not personal dose
-              <ProvenanceTag kind="SCENARIO" label={a.provenanceLabel} />
+              Environment {a.level}
+              <InfoTip label="Environmental hazard">
+                <p>{a.phase}: {rel ? `${rel.relation} link. ${rel.text}` : a.summary}</p>
+                <p className="text-xs">{a.provenanceLabel}. The space environment, not a personal dose.</p>
+              </InfoTip>
             </p>
-            <p className="mt-1 text-sm text-ink">{a.phase}: {rel ? <span className="text-ink-2">{rel.relation} link. {rel.text}</span> : a.summary}</p>
           </div>
         );
       })}
 
       <div className="px-4 pt-3">
         <div className="flex items-center justify-between gap-2">
-          <h3 className="label">Diagnosis: {focusName}</h3>
+          <h3 className="flex items-center gap-1 label">
+            {focusName}
+            <InfoTip label="Why it matters in space">{focus.explanation}</InfoTip>
+          </h3>
           <StatusBadge status={focus.status} />
         </div>
         <dl className="mt-2 space-y-2 text-sm">
           <div>
-            <dt className="font-cond text-2xs font-semibold uppercase tracking-label text-ink-3">What changed</dt>
+            <dt className="sr-only">What changed</dt>
             <dd className="text-ink">{focus.summary}</dd>
           </div>
           {trends
@@ -118,18 +127,13 @@ export function SystemIntelPanel() {
               </div>
             ))}
           <div className="rounded-tile border border-line-strong bg-raised px-3 py-2">
-            <dt className="font-cond text-2xs font-semibold uppercase tracking-label text-cyan">Recommended next step</dt>
+            <dt className="flex items-center gap-1 font-cond text-2xs font-semibold uppercase tracking-label text-cyan">
+              Next step
+              <BasisLine basis={focus.basis} />
+            </dt>
             <dd className="mt-0.5 text-ink">{focus.recommendedNextStep}</dd>
           </div>
         </dl>
-        <details className="group mt-2 text-sm">
-          <summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs font-semibold text-ink-2 [&::-webkit-details-marker]:hidden">
-            <ChevronDown aria-hidden="true" className="h-3.5 w-3.5 -rotate-90 transition-transform duration-150 group-open:rotate-0" />
-            Why it matters in microgravity
-          </summary>
-          <p className="mt-1 text-ink-2">{focus.explanation}</p>
-        </details>
-        <BasisLine basis={focus.basis} />
       </div>
 
       <div className="px-4 pt-4">
@@ -155,7 +159,7 @@ export function SystemIntelPanel() {
       </div>
 
       <div className="px-4 pt-4">
-        <h3 className="label">Countermeasures for this system, day {day}</h3>
+        <h3 className="label">Tasks today</h3>
         {sysFollowUps.length ? (
           <ul className="mt-1.5 space-y-1.5">
             {sysFollowUps.map((f) => (
@@ -201,7 +205,7 @@ export function SystemIntelPanel() {
 
       <details className="group mx-4 mt-4 rounded-tile border border-line" open={st.status !== "NOMINAL"}>
         <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 [&::-webkit-details-marker]:hidden">
-          <span className="label">Self-check guide ({def.selfCheckSteps.length} steps)</span>
+          <span className="label">Self-check ({def.selfCheckSteps.length} steps)</span>
           <ChevronDown aria-hidden="true" className="h-4 w-4 text-ink-3 transition-transform duration-200 group-open:rotate-180" />
         </summary>
         <ol className="space-y-1.5 border-t border-line px-3 py-2.5">
@@ -217,17 +221,6 @@ export function SystemIntelPanel() {
         </p>
       </details>
 
-      <p className="mx-4 mt-4 text-xs text-ink-2">
-        <span className="font-semibold text-ink">NASA HRP hazards: </span>
-        {hazardsForSystem(selectedSystem)
-          .map((h) => h.name)
-          .join(", ")}
-        .{" "}
-        <a href={HRP_HAZARDS_URL} target="_blank" rel="noopener noreferrer" className="link inline-flex items-center gap-0.5">
-          5 Hazards of Human Spaceflight
-          <ExternalLink aria-hidden="true" className="h-3 w-3" />
-        </a>
-      </p>
 
       <div className="mt-auto flex flex-wrap gap-2 px-4 py-3">
         <button type="button" className="btn btn-secondary text-xs" onClick={() => openGuidance({ kind: "metric", id: focus.metricId })}>

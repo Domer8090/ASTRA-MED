@@ -1,0 +1,55 @@
+# Packaging for Windows and Linux. Run from the repository root:
+#   npm run desktop:dist:win     (NSIS installer + portable .exe, x64 and arm64)
+#   npm run desktop:dist:linux   (AppImage, .deb and .tar.gz, x64 and arm64)
+appId: org.astramed.console
+productName: ASTRA-MED
+electronVersion: 44.11.3
+directories:
+  app: .
+  output: release
+  buildResources: build
+files:
+  - main.cjs
+  - preload.cjs
+  - importParser.cjs
+  - package.json
+  - web/**
+  - "!**/._*"
+  - "!**/.DS_Store"
+asar: true
+# Health data never leaves the machine, so there is no auto-update channel.
+publish: null
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+    - target: portable
+      arch: [x64]
+  icon: build/icon.png
+  artifactName: ${productName}-${version}-win-${arch}.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  shortcutName: ASTRA-MED
+portable:
+  artifactName: ${productName}-${version}-win-portable.${ext}
+linux:
+  target:
+    - target: AppImage
+      arch: [x64, arm64]
+    - target: deb
+      arch: [x64, arm64]
+    - target: tar.gz
+      arch: [x64, arm64]
+  category: Science
+  icon: build/icon.png
+  maintainer: ASTRA-MED team
+  synopsis: Offline astronaut health console
+  artifactName: ${productName}-${version}-linux-${arch}.${ext}
+  desktop:
+    entry:
+      Name: ASTRA-MED
+      Comment: Offline astronaut health console (prototype, synthetic data)
+      Categories: Science;MedicalSoftware;

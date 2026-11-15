@@ -7,6 +7,7 @@ import { useUiActions } from "../hooks/useUi";
 import type { CountermeasureTask } from "../types/health";
 import { formatLocalDateTime, padDay } from "../utils/dates";
 import { percent } from "../utils/formatting";
+import { InfoTip } from "./shared/InfoTip";
 import { Panel } from "./shared/Panel";
 import { FollowUpCard } from "./shared/FollowUpCard";
 import { ReadinessBreakdown } from "./shared/ReadinessBreakdown";
@@ -15,7 +16,7 @@ function CheckBox({ checked }: { checked: boolean }) {
   return (
     <span
       aria-hidden="true"
-      className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-[4px] border transition-colors duration-150 ${checked ? "border-nominal bg-nominal" : "border-line-strong bg-space"}`}
+      className={`flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-badge border transition-colors duration-150 ${checked ? "border-nominal bg-nominal" : "border-line-strong bg-space"}`}
     >
       <svg viewBox="0 0 16 16" className="t-check h-3.5 w-3.5" data-checked={checked}>
         <path d="M3.5 8.4l3 3 6-6.6" fill="none" stroke="#060B14" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
@@ -97,7 +98,12 @@ export function CountermeasureGamification() {
       title="Today's countermeasures"
       subtitle={
         <>
-          Mission day <span className="num">{padDay(day)}</span>. Example tasks for the demo plan, not NASA prescriptions. Completion never changes a health status.
+          <p>
+            Mission day <span className="num">{padDay(day)}</span>. Example tasks for the demo plan, not NASA prescriptions. Completion never changes a health status.
+          </p>
+          <p>
+            Earlier days use synthetic adherence history. A day counts toward the streak at {Math.round(COUNTERMEASURES.streakMinCompletion * 100)}% complete (ASTRA assumption).
+          </p>
         </>
       }
     >
@@ -160,15 +166,14 @@ export function CountermeasureGamification() {
           <TaskRow key={t.id} task={t} day={day} />
         ))}
       </ul>
-      <p className="mt-1 text-2xs text-ink-3">
-        Earlier days use synthetic adherence history. A day counts toward the streak at {Math.round(COUNTERMEASURES.streakMinCompletion * 100)}% complete (ASTRA assumption).
-      </p>
 
       <div className="mt-5 border-t border-line pt-4">
-        <h3 className="label">Follow-up actions {openFollowUps ? <span className="text-caution">({openFollowUps} open)</span> : null}</h3>
-        <p className="mt-0.5 text-sm text-ink-2">Pre-approved next steps for anything missed yesterday or outside its configured range today.</p>
+        <h3 className="flex items-center gap-1 label">
+          Follow-up actions {openFollowUps ? <span className="text-caution">({openFollowUps} open)</span> : null}
+          <InfoTip label="Follow-up actions">Pre-approved next steps for anything missed yesterday or outside its configured range today.</InfoTip>
+        </h3>
         {followUps.length === 0 ? (
-          <p className="mt-2 rounded-tile border border-dashed border-line-strong px-3 py-3 text-sm text-ink-2">No follow-ups for day {day}. Every indicator is inside its configured range and yesterday's tasks were completed.</p>
+          <p className="mt-2 text-sm text-ink-2">No follow-ups for day {day}.</p>
         ) : (
           <ul className="mt-2 space-y-2">
             {followUps.map((f) => (

@@ -53,13 +53,16 @@ function range(days: readonly EffectiveDay[], metric: MetricId, day: number): st
 export function buildSurgeonReport(i: ReportInput): string {
   const L: string[] = [];
   const push = (...lines: string[]) => L.push(...lines);
-  const manual = PRIMARY_METRIC_IDS.some((m) => i.diagnostics[m].latest?.source === "manual");
+  const crewEntered = PRIMARY_METRIC_IDS.some((m) => {
+    const source = i.diagnostics[m].latest?.source;
+    return source === "manual" || source === "tuesday" || source === "device" || source === "device-sim";
+  });
 
   push(
     "ASTRA-MED HEALTH SUMMARY FOR THE FLIGHT SURGEON",
     `Mission day ${i.day}. Generated ${i.generatedAt} (UTC) on the crew device.`,
     `Scenario: ${i.scenario.code}, ${i.scenario.name}.`,
-    `Data: ${manual ? "synthetic demo telemetry plus crew entries marked MANUAL" : "SYNTHETIC demo telemetry, not real astronaut data"}.`,
+    `Data: ${crewEntered ? "synthetic demo telemetry plus crew-entered readings (manual and Tuesday voice)" : "SYNTHETIC demo telemetry, not real astronaut data"}.`,
     "Thresholds are prototype demonstration ranges, not NASA flight rules.",
     `Earth–Mars one-way signal delay today: ${i.signalDelayMinutes.toFixed(1)} min.`,
     "",

@@ -15,6 +15,7 @@ import type {
   GlucoseContext,
   MeasurementValue,
   MetricId,
+  MeasurementSource,
   MissionSettings,
   ScenarioId,
   TaskCompletionRecord,
@@ -71,6 +72,7 @@ export interface NewMeasurement {
   value: MeasurementValue;
   missionDay: number;
   recordedAt: string;
+  source?: Extract<MeasurementSource, "manual" | "tuesday" | "device" | "device-sim">;
   notes?: string;
   glucoseContext?: GlucoseContext;
   /** True when the linked countermeasure task already shows as complete (including seeded history). */
@@ -83,6 +85,8 @@ export function createMissionStore(storage: StorageService = createStorageServic
   const c = storage.read(STORAGE_KEYS.countermeasures, sanitizeCompletions, {});
   const f = storage.read(STORAGE_KEYS.followUps, sanitizeFollowUps, {});
   const s = storage.read(STORAGE_KEYS.settings, (raw) => sanitizeSettings(raw, DEFAULT_SETTINGS), DEFAULT_SETTINGS);
+  const migratedTuesdayLogs = m.status === "ok" && m.value.some((measurement) => measurement.source === "tuesday");
+  const migrationSaved = !migratedTuesdayLogs || storage.write(STORAGE_KEYS.measurements, m.value);
   for (const [key, r] of [
     [STORAGE_KEYS.measurements, m],
     [STORAGE_KEYS.countermeasures, c],
@@ -100,7 +104,7 @@ export function createMissionStore(storage: StorageService = createStorageServic
     completions: c.value,
     followUps: f.value,
     settings: s.value,
-    storage: { available: storage.available, recoveredKeys: recovered, lastWriteOk: true },
+    storage: { available: storage.available, recoveredKeys: recovered, lastWriteOk: migrationSaved },
   };
   const listeners = new Set<Listener>();
 
@@ -175,7 +179,7 @@ export function createMissionStore(storage: StorageService = createStorageServic
         missionDay: input.missionDay,
         recordedAt: input.recordedAt,
         enteredAt: new Date().toISOString(),
-        source: "manual",
+        source: input.source ?? "manual",
         ...(input.notes ? { notes: input.notes } : {}),
         ...(input.glucoseContext ? { glucoseContext: input.glucoseContext } : {}),
       };

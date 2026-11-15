@@ -192,7 +192,11 @@ export function sanitizeMeasurement(x: unknown): VitalMeasurement | null {
   if (!isRecord(x)) return null;
   if (typeof x.id !== "string" || !isMetricId(x.metricId) || !isMissionDay(x.missionDay) || !isIsoDate(x.recordedAt)) return null;
   if (!isValueFor(x.metricId, x.value)) return null;
-  if (x.source !== "manual" && x.source !== "import") return null;
+  const notes = typeof x.notes === "string" && x.notes.length <= 280 ? x.notes : undefined;
+  // Older Tuesday voice logs were persisted as MANUAL. Identify only the
+  // exact legacy marker written by the old voice path; other crew entries stay MANUAL.
+  const legacyTuesday = x.source === "manual" && notes === "Voice telemetry via Tuesday AI";
+  if (x.source !== "manual" && x.source !== "tuesday" && x.source !== "import" && x.source !== "device" && x.source !== "device-sim") return null;
   const out: VitalMeasurement = {
     id: x.id,
     metricId: x.metricId,
@@ -200,9 +204,9 @@ export function sanitizeMeasurement(x: unknown): VitalMeasurement | null {
     unit: typeof x.unit === "string" ? x.unit : METRIC_UNITS[x.metricId],
     missionDay: x.missionDay,
     recordedAt: x.recordedAt,
-    source: x.source,
+    source: legacyTuesday ? "tuesday" : x.source,
   };
-  if (typeof x.notes === "string" && x.notes.length <= 280) out.notes = x.notes;
+  if (notes) out.notes = notes;
   if (isIsoDate(x.enteredAt)) out.enteredAt = x.enteredAt;
   if (x.glucoseContext === "fasting" || x.glucoseContext === "post-meal" || x.glucoseContext === "other") out.glucoseContext = x.glucoseContext;
   return out;

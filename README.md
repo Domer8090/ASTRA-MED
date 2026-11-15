@@ -43,6 +43,23 @@ npm run donki:check      # live check of each DONKI endpoint on both hosts
 npm run qa:screenshots   # screenshots of every major view (needs npm run preview running)
 ```
 
+## Desktop, iPad and integration
+
+The same rules engine also runs outside the browser. See
+[`docs/INTEGRATION.md`](docs/INTEGRATION.md) for deployment and data-import
+details.
+
+| App | Build | Notes |
+| --- | --- | --- |
+| Windows desktop | `npm run desktop:dist:win` | NSIS installer and portable .exe; offline; `--kiosk`, `--officer` |
+| Linux desktop | `npm run desktop:dist:linux` | AppImage, .deb, .tar.gz |
+| iPad (SwiftUI) | open `ios/AstraMed.xcodeproj` | Native app; engine runs in JavaScriptCore; Tuesday uses Apple's on-device model when available |
+| CLI | `npm run core:build`, then `node integrations/cli/astra-core.mjs evaluate file.json` | JSON or CSV in, statuses out; exit code 3 when rows are rejected |
+
+The desktop app has **File > Import readings** for JSON or CSV files that
+follow `integrations/schema/measurement-input.schema.json`. Each row passes
+the same entry checks as the measurement form.
+
 Reports: [`DATA_SOURCES.md`](DATA_SOURCES.md) (data provenance audit) and
 [`docs/QA_REPORT.md`](docs/QA_REPORT.md) (final QA with screenshots).
 
@@ -71,7 +88,7 @@ CCMC DONKI host, which needs no key.
 | Crew vitals | 8 required indicators with status, change, 14-day sparkline and a gauge against configured ranges |
 | Body map | SVG body plate with 5 keyboard-accessible hotspots and system detail, self-check guide and next step |
 | Guidance drawer | What changed, why it matters in space, what to do next, rule trace, measurement steps |
-| Trends | 7 Recharts views, 7/30/90/180-day windows, reference bands, CAUTION periods, manual-entry markers |
+| Trends | 7 Recharts views, 7/30/90/180-day windows, reference bands, CAUTION periods, MANUAL and TUESDAY entry markers |
 | Countermeasures | Daily tasks, XP once per task per day, streak, undo, follow-up actions |
 | Space weather | DONKI FLR, SEP, CME and notifications; LIVE, PARTIAL, CACHED or DEMO / OFFLINE FALLBACK |
 | Five hazards | NASA HRP's five hazards of human spaceflight, each tied to today's engine status and an action: space radiation (dosimeter, space weather), isolation and confinement (Tuesday), distance from Earth (signal delay, ground link, medical-officer contact), gravity fields (heart, bone, eyes), hostile and closed environments (temperature, fluids, glucose) |
@@ -93,10 +110,14 @@ See [`docs/PLAN.md`](docs/PLAN.md). The source-of-truth specification is
 src/config     thresholds (with provenance) and colour tokens
 src/data       synthetic telemetry, scenarios, guidance, tasks, DONKI fallback, sources
 src/engine     diagnostic, body-system, advisory, readiness and protocol engines (pure)
+src/core       one JSON-in / JSON-out interface to the engines, bundled for other hosts
 src/services   storage, telemetry merge, chart series, NASA DONKI client
 src/state      framework-free mission store
 src/hooks      React bindings and providers
 src/components presentation only
+desktop        Electron shell for Windows and Linux
+ios            SwiftUI iPad app
+integrations   CLI, input schema and example files
 ```
 
 ## Tuesday and the on-device model
@@ -106,12 +127,52 @@ lab-report reading, run a model on the same machine with
 [Ollama](https://ollama.com):
 
 ```bash
-ollama pull qwen3:8b
+ollama pull qwen3:4b
 ```
 
 For photos and lab reports, also install a MedGemma 1.5 4B build and pick it in
 Tuesday's settings. Tuesday only talks to `localhost`; health data, photos and
 camera frames never leave the device.
+
+### Local Whisper voice input
+
+On macOS, install the local Whisper runtime and audio converter once, then fetch
+the English base model and fast Qwen3 4B model:
+
+```bash
+brew install whisper-cpp ffmpeg ollama
+npm run voice:setup
+```
+
+For natural local Kokoro speech, install its runtime and the system phonemizer,
+then download the ONNX model and voice pack:
+
+```bash
+brew install python@3.12 espeak-ng
+npm run voice:setup:kokoro
+```
+
+Run each command in its own terminal from the project folder:
+
+```bash
+npm run dev
+npm run voice:local
+```
+
+The helper listens only on `127.0.0.1:11435`. Check its live state at
+`http://127.0.0.1:11435/health`; it reports Whisper, Ollama, and the active
+TTS provider. Tuesday prefers Whisper and falls back to browser speech
+recognition when the helper is offline. It prefers persistent Kokoro ONNX
+speech when the worker is installed, then falls back to the cleanest available
+local English system voice. The mute control stops either output immediately.
+The microphone pauses during speech and through a 300 ms acoustic tail.
+
+Simple readings use the deterministic onboard parser. Multi-reading requests
+are split by local Qwen3 4B using constrained JSON; each phrase still has to
+pass the parser before it can be logged. Hard questions go to Tuesday's local
+model. Audio is transcribed on this device and temporary clips are deleted
+after use. If Kokoro isn't set up, the helper reports `"tts":"system"` and
+`/tts` returns a clean 503 so the browser voice fallback can take over.
 
 ## Known limitations
 

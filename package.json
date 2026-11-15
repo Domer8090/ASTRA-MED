@@ -15,7 +15,16 @@
     "donki:fallback": "node scripts/build-donki-fallback.mjs",
     "donki:check": "node scripts/check-donki.mjs",
     "qa:screenshots": "node scripts/qa-screenshots.mjs",
-    "assets:fetch": "node scripts/fetch-offline-assets.mjs"
+    "assets:fetch": "node scripts/fetch-offline-assets.mjs",
+    "core:build": "vite build -c vite.core.config.ts && node scripts/copy-core.mjs",
+    "core:cli": "node integrations/cli/astra-core.mjs",
+    "voice:setup": "node \"scripts/setup-local-voice.mjs\"",
+    "voice:setup:kokoro": "node \"scripts/setup-kokoro.mjs\"",
+    "voice:local": "node \"integrations/voice/local-voice-server.mjs\"",
+    "desktop:prepare": "npm run typecheck && vite build --outDir desktop/web --emptyOutDir && node scripts/desktop-prepare.mjs",
+    "desktop:start": "npm run desktop:prepare && electron desktop",
+    "desktop:dist:win": "npm run desktop:prepare && electron-builder --projectDir desktop --win",
+    "desktop:dist:linux": "npm run desktop:prepare && electron-builder --projectDir desktop --linux"
   },
   "dependencies": {
     "@fontsource/barlow": "^5.3.0",
@@ -37,6 +46,8 @@
     "@types/three": "0.186.0",
     "@vitejs/plugin-react": "^6.3.0",
     "autoprefixer": "^10.6.2",
+    "electron": "44.11.3",
+    "electron-builder": "26.18.0",
     "eslint": "^10.15.0",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.7",

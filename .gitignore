@@ -8,3 +8,8 @@ dist
 *.log
 # Third-party agent skills are installed locally (see skills-lock.json); some licenses forbid redistribution.
 .claude/skills/
+
+# Desktop and core build output
+dist-core
+desktop/web
+desktop/release

@@ -282,3 +282,13 @@ describe("two hands and the ground loop", () => {
     expect(reread.settings).toMatchObject({ hands: 2, handIntroSeen: true });
   });
 });
+
+describe("health brief values", () => {
+  it("lists the latest value of each indicator for the model", async () => {
+    const { createAstraCore, memoryStorage } = await import("../core/astraCore");
+    const core = createAstraCore(memoryStorage(), { now: () => new Date("2026-11-14T12:00:00Z") });
+    const prompt = JSON.parse(core.call("tuesdayModelPrompt", JSON.stringify({ text: "how did I sleep" }))).result as { messages: { role: string; content: string }[] };
+    const system = prompt.messages[0]!.content;
+    expect(system).toMatch(/Latest readings: .*Daily sleep [\d.]+ h \(day \d+, NOMINAL\)/);
+  });
+});

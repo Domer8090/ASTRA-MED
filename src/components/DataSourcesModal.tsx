@@ -94,10 +94,23 @@ function About() {
           <div>
             <dt className="font-semibold text-ink">Yours</dt>
             <dd className="mt-0.5 text-ink-2">
-              Measurements you log (tagged MANUAL) and tasks you mark. They stay in this browser and override the demo values for that day.
+              Measurements you enter yourself (MANUAL), readings logged by Tuesday from voice (TUESDAY), readings Auto Sync saved from a Bluetooth device (DEVICE) or the simulated mission-hardware bridge (SIM DEVICE, synthetic values), and tasks you mark. They stay in this browser and override the demo values for that day.
             </dd>
           </div>
         </dl>
+      </div>
+
+      <div className="rounded-tile border border-line p-4">
+        <h4 className="flex items-center gap-2 font-cond text-md font-bold text-tue">
+          Tuesday voice logging
+        </h4>
+        <p className="mt-1.5 text-sm text-ink-2 leading-relaxed">
+          Tuesday uses local Whisper for speech recognition, Qwen3 4B to split requests with multiple commands, and the deterministic onboard parser to validate every reading before it is logged. Hard questions go to the local Tuesday model. Kokoro ONNX is the preferred local neural voice; if it is unavailable or fails, Tuesday uses the best installed English system voice. Speech pauses the microphone through a 300 ms audio tail so Tuesday does not hear its own response. Audio and health data stay on this device.
+        </p>
+        <pre className="mt-3 overflow-x-auto rounded-tile border border-line bg-[#060B14] p-3 font-mono text-xs text-ink-2"><code>{`# One-time macOS setup\nbrew install whisper-cpp ffmpeg ollama python@3.12 espeak-ng\nnpm run voice:setup\nnpm run voice:setup:kokoro\n\n# Terminal 1\nnpm run dev\n\n# Terminal 2\nnpm run voice:local\n\n# Check local voice services\ncurl http://127.0.0.1:11435/health`}</code></pre>
+        <p className="mt-2 text-xs text-ink-3">
+          Select Tuesday mode in the console overview or navigation rail for voice logging, the day's checklist and the action queue.
+        </p>
       </div>
 
       <div>
@@ -308,7 +321,7 @@ function Thresholds() {
 }
 
 function Labels() {
-  const kinds: Provenance[] = ["SYNTHETIC", "MANUAL", "LIVE", "PARTIAL", "CACHED", "ARCHIVED", "UNAVAILABLE", "SCENARIO", "SUPPLIED PROTOTYPE", "ASTRA ASSUMPTION", "MISSION PLAN"];
+  const kinds: Provenance[] = ["SYNTHETIC", "MANUAL", "TUESDAY", "DEVICE", "SIM DEVICE", "LIVE", "PARTIAL", "CACHED", "ARCHIVED", "UNAVAILABLE", "SCENARIO", "SUPPLIED PROTOTYPE", "ASTRA ASSUMPTION", "MISSION PLAN"];
   return (
     <dl className="divide-y divide-line rounded-tile border border-line">
       {kinds.map((k) => (
@@ -448,9 +461,15 @@ function StorageSettings() {
 export function DataSourcesModal() {
   const { sourcesTab } = useUiState();
   const { closeSources, openSources } = useUiActions();
+  const { startTour } = useOnboarding();
   const tab = sourcesTab ?? "about";
+  // Closing the Overview tab starts the spotlight tour, so a first-time viewer goes straight into the guided walk-through.
+  const close = () => {
+    closeSources();
+    if (tab === "about") startTour();
+  };
   return (
-    <Dialog open={sourcesTab !== null} onClose={closeSources} title="Overview and data sources" labelId="sources-title" widthClass="max-w-4xl">
+    <Dialog open={sourcesTab !== null} onClose={close} title="Overview and data sources" labelId="sources-title" widthClass="max-w-4xl">
       <div className="sticky top-0 z-10 border-b border-line bg-raised px-5 pt-2">
         <div role="tablist" aria-label="Data sources sections" className="relative -mb-px flex gap-1 overflow-x-auto">
           {TABS.map((t) => (

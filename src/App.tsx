@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AppShell } from "./components/AppShell";
+import { AutoSyncProvider } from "./hooks/useAutoSync";
 import { CmeForecastProvider } from "./hooks/useCmeForecast";
 import { MissionModelProvider } from "./hooks/useMissionModel";
 import { OnboardingProvider } from "./hooks/useOnboarding";
@@ -32,9 +33,11 @@ export default function App({ store }: { store: MissionStore }) {
             <UiProvider>
               <OnboardingProvider>
                 <MissionModelProvider>
-                  <TuesdayProvider>
-                    <AppShell />
-                  </TuesdayProvider>
+                  <AutoSyncProvider>
+                    <TuesdayProvider>
+                      <AppShell />
+                    </TuesdayProvider>
+                  </AutoSyncProvider>
                 </MissionModelProvider>
               </OnboardingProvider>
             </UiProvider>

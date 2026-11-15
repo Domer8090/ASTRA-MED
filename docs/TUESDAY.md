@@ -47,6 +47,17 @@ with any threshold.
 | Immersive Earth | `src/components/recharge/EarthView.tsx`, `src/services/earthImagery.ts`, `src/engine/sunPosition.ts` | Bundled NASA Blue Marble and VIIRS city lights, the real day–night line, a "Find it" game, and the latest EPIC photo when a ground link exists |
 | Games | `OrbitCatch.tsx`, `BreatheRing.tsx`, Find it in `EarthView.tsx` | No fail state. After a session Tuesday asks how the crew member feels, 1 to 5 |
 | Mental and physical tracking | `src/state/tuesdayStore.ts`, `CheckInCard.tsx` | Check-in logs the day's mood reading (so the engines and drift see it) and keeps energy in Tuesday's log; weekly summary in the Tuesday panel |
+| Tuesday Mode & JARVIS Command Center | `src/components/tuesday/TuesdayMode.tsx` | Futuristic HUD command center inspired by JARVIS with rotating 3D holographic wireframe core, live intelligence feed, active sub-agent monitors and circular vitals gauges |
+| Autonomous Voice Telemetry & Speech Synthesis | `src/hooks/useVoiceRecognition.ts`, `src/engine/voiceParser.ts`, `src/services/voiceSynth.ts` | Web Speech API speech-to-text. Astronauts speak vitals (e.g., "my bpm is 100", "BP 120/80", "temp 37.1") and Tuesday autonomously validates, logs the measurement, updates readiness, and speaks back confirmation in a calibrated JARVIS voice |
+
+## Tuesday Mode & Autonomous Voice Telemetry
+
+Instead of astronauts having to open forms, type numbers, and waste valuable mission time:
+1. **Speak your vitals**: "My BPM is 100", "Blood pressure 120 over 80", "Temperature 37.1 °C", "I slept 7.5 hours".
+2. **Autonomous parsing**: `voiceParser.ts` parses the reading, extracts the biometric value, and verifies it against the device range bounds in `src/utils/validation.ts`.
+3. **Instant logging**: Automatically commits the measurement to `missionStore.logMeasurement()`, recalculating physiological readiness, body system statuses, and trends immediately.
+4. **JARVIS-style speech synthesis**: Responds back in articulate British English speech (Daniel / Oliver / George) confirming the logged reading and updated status.
+5. **Tuesday Command Center HUD**: Accessible via the "TUESDAY MODE" toggle in the Overview console header, the top telemetry bar, or the navigation rail. Features a rotating 3D holographic globe, live audio visualizer waveforms, active agent tiles, circular gauges, and glowing "Talk to Tuesday" voice command pill.
 
 ## Contacting the medical officer
 

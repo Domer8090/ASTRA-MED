@@ -20,7 +20,11 @@ function numeric(days: readonly EffectiveDay[], d: number, metric: MetricId): nu
 
 function isManual(days: readonly EffectiveDay[], d: number, metric: MetricId): boolean {
   const r = days[d - 1]?.readings[metric];
-  return Boolean(r && r.source !== "synthetic");
+  return Boolean(r && r.source !== "synthetic" && r.source !== "tuesday");
+}
+
+function isTuesday(days: readonly EffectiveDay[], d: number, metric: MetricId): boolean {
+  return days[d - 1]?.readings[metric]?.source === "tuesday";
 }
 
 /** Rows for the visible window. Days after the selected day have no values (replay stops at "today"). */
@@ -32,6 +36,7 @@ export function buildChartRows(days: readonly EffectiveDay[], selectedDay: numbe
     const bpv = bp && isBloodPressure(bp.value) ? bp.value : null;
     const get = (m: MetricId) => (past ? numeric(days, d, m) : null);
     const manual = (m: MetricId, v: number | null) => (past && isManual(days, d, m) ? v : null);
+    const tuesday = (m: MetricId, v: number | null) => (past && isTuesday(days, d, m) ? v : null);
     const hr = get("heartRate");
     const glucose = get("bloodGlucose");
     const temp = get("bodyTemperature");
@@ -46,27 +51,38 @@ export function buildChartRows(days: readonly EffectiveDay[], selectedDay: numbe
       day: d,
       heartRate: hr,
       heartRateManual: manual("heartRate", hr),
+      heartRateTuesday: tuesday("heartRate", hr),
       systolic: past && bpv ? bpv.systolic : null,
       diastolic: past && bpv ? bpv.diastolic : null,
       systolicManual: past && bpv && isManual(days, d, "bloodPressure") ? bpv.systolic : null,
       diastolicManual: past && bpv && isManual(days, d, "bloodPressure") ? bpv.diastolic : null,
+      systolicTuesday: past && bpv && isTuesday(days, d, "bloodPressure") ? bpv.systolic : null,
+      diastolicTuesday: past && bpv && isTuesday(days, d, "bloodPressure") ? bpv.diastolic : null,
       bloodGlucose: glucose,
       bloodGlucoseManual: manual("bloodGlucose", glucose),
+      bloodGlucoseTuesday: tuesday("bloodGlucose", glucose),
       bodyTemperature: temp,
       bodyTemperatureManual: manual("bodyTemperature", temp),
+      bodyTemperatureTuesday: tuesday("bodyTemperature", temp),
       sleep,
       sleepManual: manual("sleep", sleep),
+      sleepTuesday: tuesday("sleep", sleep),
       mood,
       moodManual: manual("mood", mood),
+      moodTuesday: tuesday("mood", mood),
       aredMinutes: ared,
       aredManual: manual("aredMinutes", ared),
+      aredTuesday: tuesday("aredMinutes", ared),
       dailyDose: daily,
       cumulativeDose: cumulative,
       cumulativeManual: manual("radiation", cumulative),
+      cumulativeTuesday: tuesday("radiation", cumulative),
       pvt,
       pvtManual: manual("pvt", pvt),
+      pvtTuesday: tuesday("pvt", pvt),
       hydration,
       hydrationManual: manual("hydration", hydration),
+      hydrationTuesday: tuesday("hydration", hydration),
     });
   }
   return rows;

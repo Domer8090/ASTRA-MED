@@ -9,7 +9,7 @@
 export const DEFAULT_ENDPOINT = "http://localhost:11434";
 
 export interface ModelChoice {
-  /** Fast conversational model, Qwen3 8B preferred. */
+  /** Fast conversational model, Qwen3 4B preferred for voice routing. */
   chat: string | null;
   /** Multimodal medical model for images and lab reports, MedGemma preferred. */
   medical: string | null;
@@ -20,6 +20,13 @@ export interface ChatMessage {
   content: string;
   /** Base64 images (no data: prefix) for multimodal models. */
   images?: string[];
+}
+
+export interface JsonObjectSchema {
+  type: "object";
+  properties: Record<string, unknown>;
+  required: string[];
+  additionalProperties?: boolean;
 }
 
 /** Only the loopback interface counts as on-device. */
@@ -81,7 +88,8 @@ export async function streamChat(args: {
   messages: ChatMessage[];
   signal?: AbortSignal;
   onToken?: (textSoFar: string) => void;
-  format?: "json";
+  format?: "json" | JsonObjectSchema;
+  temperature?: number;
 }): Promise<string> {
   const url = endpointUrl(args.endpoint, "/api/chat");
   if (!url) return "ERROR: The model endpoint must be on this device (localhost).";
@@ -97,7 +105,7 @@ export async function streamChat(args: {
         // Qwen3 answers faster without its thinking pass; Tuesday wants short replies.
         ...(isThinkingModel(args.model) ? { think: false } : {}),
         ...(args.format ? { format: args.format } : {}),
-        options: { temperature: 0.3, num_ctx: 4096 },
+        options: { temperature: args.temperature ?? 0.3, num_ctx: 4096 },
       }),
     });
     if (!res.ok || !res.body) return `ERROR: The local model answered HTTP ${res.status}.`;
@@ -129,6 +137,56 @@ export async function streamChat(args: {
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") return "ERROR: Stopped.";
     return "ERROR: The local model is not reachable.";
+  }
+}
+
+/**
+ * Ask a localhost model to separate a compound voice request into exact source
+ * phrases. Callers still validate every phrase with the deterministic parser;
+ * the model cannot invent or directly write a reading.
+ */
+export async function splitVoiceCommands(args: {
+  endpoint: string;
+  model: string;
+  transcript: string;
+  signal?: AbortSignal;
+}): Promise<string[] | null> {
+  const raw = await streamChat({
+    endpoint: args.endpoint,
+    model: args.model,
+    signal: args.signal,
+    format: {
+      type: "object",
+      properties: { commands: { type: "array", items: { type: "string" } } },
+      required: ["commands"],
+      additionalProperties: false,
+    },
+    temperature: 0,
+    messages: [
+      {
+        role: "system",
+        content: "Split the user's spoken request into 1 to 4 separate command phrases only when it contains multiple commands. Return JSON with one property: commands, an array of exact contiguous quotes copied verbatim from the user's words. Do not infer, correct, or add numbers. If it is not multiple commands, return {\"commands\":[]}. /no_think",
+      },
+      { role: "user", content: args.transcript.slice(0, 1200) },
+    ],
+  });
+  if (!raw || raw.startsWith("ERROR:")) return null;
+  const cleanRaw = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/<think>[\s\S]*$/i, "").trim();
+  try {
+    const parsed: unknown = JSON.parse(cleanRaw);
+    if (!parsed || typeof parsed !== "object" || !Array.isArray((parsed as { commands?: unknown }).commands)) return null;
+    const source = args.transcript.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+    const commands = (parsed as { commands: unknown[] }).commands
+      .filter((part): part is string => typeof part === "string")
+      .map((part) => part.trim())
+      .filter((part) => {
+        const quote = part.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+        return quote.length > 0 && source.includes(quote);
+      })
+      .slice(0, 4);
+    return commands.length > 1 ? commands : null;
+  } catch {
+    return null;
   }
 }
 

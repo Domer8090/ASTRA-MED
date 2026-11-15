@@ -143,8 +143,8 @@ export const HOTSPOTS: HotspotGeometry[] = [
   },
   {
     id: "cardiovascular",
-    anchor: [CX + 12, 206],
-    region: `M${CX + 12} 168 C${CX + 46} 168 ${CX + 50} 214 ${CX + 30} 236 C${CX + 18} 246 ${CX} 246 ${CX - 12} 234 C${CX - 26} 220 ${CX - 22} 168 ${CX + 12} 168Z`,
+    anchor: [CX + 4, 150],
+    region: `M${CX + 4} 118 C${CX + 38} 118 ${CX + 46} 164 ${CX + 24} 188 C${CX + 12} 198 ${CX - 6} 198 ${CX - 18} 186 C${CX - 30} 170 ${CX - 25} 118 ${CX + 4} 118Z`,
     callout: { x: 640 - 16 - W, y: 160, side: "right" },
   },
   {

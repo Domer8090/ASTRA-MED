@@ -1,0 +1,6 @@
+# Synthetic example. One reading per row; missing cells are left empty.
+metricId,missionDay,shipTime,value,systolic,diastolic,notes
+heartRate,42,07:30,64,,,
+bloodPressure,42,07:31,,118,76,
+bodyTemperature,42,07:33,36.9,,,
+sleep,42,06:40,6.8,,,

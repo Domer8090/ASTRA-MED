@@ -45,14 +45,15 @@ export function buildMedicalMessage(i: MedicalMessageInput): string {
     "ACTIONS TAKEN ON BOARD",
     i.actionsTaken.trim() || "(nothing written)",
     "",
-    `CONSOLE STATUS: ${i.overall} (prototype thresholds; synthetic demo data unless marked manual)`,
+    `CONSOLE STATUS: ${i.overall} (prototype thresholds; synthetic demo data unless marked as crew-entered)`,
   );
   const flagged = Object.values(i.diagnostics).filter((d) => d.status !== "NOMINAL");
   if (!flagged.length) push("- All indicators inside their configured ranges.");
   for (const d of flagged) {
     const v = d.latest ? formatWithUnit(d.metricId, d.latest.value) : "no reading";
     const rule = d.triggeredRules[0];
-    push(`- ${METRIC_GUIDANCE[d.metricId].name}: ${v}, ${d.status}${rule ? ` (rule: ${rule.threshold})` : ""}${d.latest?.source === "manual" ? ", logged by crew" : ""}`);
+    const crewEntered = d.latest?.source === "manual" || d.latest?.source === "tuesday";
+    push(`- ${METRIC_GUIDANCE[d.metricId].name}: ${v}, ${d.status}${rule ? ` (rule: ${rule.threshold})` : ""}${crewEntered ? ", logged by crew" : ""}`);
   }
   if (i.drift.state === "drift") push(`- Pattern check: ${i.drift.drivers.map((x) => x.text).join(" ")}`);
   for (const t of i.trends) push(`- Trend watch: ${t.text}`);

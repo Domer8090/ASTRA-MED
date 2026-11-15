@@ -16,6 +16,7 @@ import { formatLocalDateTime, formatRelative, padDay } from "../utils/dates";
 import { FollowUpCard } from "./shared/FollowUpCard";
 import { Panel } from "./shared/Panel";
 import { ProvenanceTag, type Provenance } from "./shared/ProvenanceTag";
+import { InfoTip } from "./shared/InfoTip";
 
 const TYPE_LABEL: Record<DonkiEventType, string> = {
   FLR: "Solar flares",
@@ -93,9 +94,11 @@ function HazardAssessment({ a, day }: { a: EnvironmentAdvisory | undefined; day:
       <div className="flex items-start gap-3 rounded-tile border border-line p-3">
         <CheckCircle2 aria-hidden="true" className="mt-0.5 h-4 w-4 text-nominal" />
         <div>
-          <p className="label">Environmental hazard assessment, day {padDay(day)}</p>
-          <p className="mt-1 text-sm text-ink">No environmental hazard is active for this mission day.</p>
-          <p className="mt-0.5 text-xs text-ink-2">Scenario C simulates a solar particle event: precursor day 130, event days 131–133, all clear day 134.</p>
+          <p className="flex items-center gap-1 label">
+            Environment, day {padDay(day)}
+            <InfoTip label="Environment">Scenario C simulates a solar particle event: precursor day 130, event days 131–133, all clear day 134.</InfoTip>
+          </p>
+          <p className="mt-1 text-sm text-ink">No environmental hazard today.</p>
         </div>
       </div>
     );
@@ -106,7 +109,13 @@ function HazardAssessment({ a, day }: { a: EnvironmentAdvisory | undefined; day:
     <div className={`rounded-tile border p-3 md:p-4 ${tone}`}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
-          <p className="label">Environmental hazard assessment, day {padDay(day)}</p>
+          <p className="flex items-center gap-1 label">
+            Environment, day {padDay(day)}
+            <InfoTip label="Why it matters">
+              <p>{a.whyItMatters}</p>
+              {a.source === "scenario" ? <p className="text-xs">Dosimeter model: {SEP_DOSE_MODEL_SUMMARY} The hazard level itself never sets a dose.</p> : null}
+            </InfoTip>
+          </p>
           <p className={`mt-1 flex items-center gap-2 font-cond text-xl font-bold tracking-status ${a.level === "ALL CLEAR" ? "text-nominal" : "text-caution"}`}>
             <ShieldAlert aria-hidden="true" className="h-5 w-5" />
             {a.level}
@@ -116,7 +125,6 @@ function HazardAssessment({ a, day }: { a: EnvironmentAdvisory | undefined; day:
         <ProvenanceTag kind={a.source === "scenario" ? "SCENARIO" : "LIVE"} label={a.provenanceLabel} />
       </div>
       <p className="mt-2 text-sm text-ink">{a.summary}</p>
-      <p className="mt-1 text-sm text-ink-2">{a.whyItMatters}</p>
 
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <div>
@@ -126,11 +134,11 @@ function HazardAssessment({ a, day }: { a: EnvironmentAdvisory | undefined; day:
               <li key={r.id} className="rounded-tile border border-line px-3 py-2">
                 <p className="flex items-center gap-2 text-sm">
                   <span className="chip-tag border-line-strong text-ink-2">{r.relation}</span>
+                  <InfoTip label={BODY_SYSTEMS[r.id].shortName}>{r.text}</InfoTip>
                   <button type="button" className="link text-sm" onClick={() => openGuidance({ kind: "system", id: r.id })}>
                     {BODY_SYSTEMS[r.id].shortName}
                   </button>
                 </p>
-                <p className="mt-1 text-xs text-ink-2">{r.text}</p>
                 <p className="mt-0.5 text-2xs text-ink-3">Watch: {r.indicators.map((m) => METRIC_GUIDANCE[m].shortName).join(", ")}</p>
               </li>
             ))}
@@ -145,12 +153,6 @@ function HazardAssessment({ a, day }: { a: EnvironmentAdvisory | undefined; day:
           ) : null}
         </div>
       </div>
-      {a.source === "scenario" ? (
-        <p className="mt-3 rounded-tile border border-line px-3 py-2 text-xs text-ink-2">
-          <span className="font-semibold text-ink">Dosimeter model: </span>
-          {SEP_DOSE_MODEL_SUMMARY} The hazard level itself never sets a dose.
-        </p>
-      ) : null}
     </div>
   );
 }
@@ -212,10 +214,11 @@ function CmeForecastCard() {
           <h3 className="flex items-center gap-2 font-cond text-md font-bold text-ink">
             <Sun aria-hidden="true" className="h-4 w-4 text-caution" />
             Solar storm forecast: Earth and Mars
+            <InfoTip label="Solar storm forecast">
+              <p>When the next coronal mass ejection is predicted to arrive, from NASA&apos;s WSA-ENLIL model runs in DONKI. A forecast, not an observation; arrival times are often off by half a day or more.</p>
+              <p className="text-xs">The model reports planets and spacecraft, not the Ares ship, so Mars stands in for a Mars transit. It never sets a dose or a health status.</p>
+            </InfoTip>
           </h3>
-          <p className="mt-0.5 max-w-[80ch] text-xs text-ink-2">
-            When the next coronal mass ejection is predicted to arrive, from NASA&apos;s WSA-ENLIL model runs in DONKI. A forecast, not an observation; arrival times are often off by half a day or more.
-          </p>
         </div>
         <ProvenanceTag kind={tag.kind} label={tag.label} />
       </div>
@@ -225,7 +228,7 @@ function CmeForecastCard() {
       </div>
       <p className="border-t border-line px-3 py-2 text-2xs text-ink-3">
         {fc.retrievedAt ? `Retrieved ${formatRelative(fc.retrievedAt, now)}${fc.host ? ` from ${fc.host}` : ""}.` : fc.loading ? "Loading the model forecast…" : "No forecast loaded yet. It loads automatically when online."}{" "}
-        {fc.error ?? ""} The model reports planets and spacecraft, not the Ares ship, so Mars stands in for a Mars transit. Environmental context only; it never sets a dose or a health status.
+        {fc.error ?? ""}
       </p>
     </div>
   );
@@ -254,7 +257,7 @@ export function SpaceWeatherPanel() {
     <Panel
       id="weather"
       title="Space weather monitor"
-      subtitle="What the space environment means for the mission now, then the NASA DONKI records behind it. Environmental hazard, never a personal dose."
+      subtitle={<><p>What the space environment means for the mission now, then the NASA DONKI records behind it.</p><p>Environmental hazard, never a personal dose. Flare, SEP and CME records describe space near Earth; personal exposure comes only from the dosimeter.</p><p>Source: NASA DONKI (CCMC DONKI API and api.nasa.gov). NOAA SWPC is the official US forecast source. Only date ranges are sent; no health data leaves this browser.</p></>}
       actions={
         <>
           <ProvenanceTag kind={tag.kind} label={tag.label} />
@@ -283,17 +286,20 @@ export function SpaceWeatherPanel() {
 
       <CmeForecastCard />
 
-      <div className="mt-4 flex items-start gap-3 rounded-tile border border-caution/35 px-3 py-2.5">
-        <Radiation aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-caution" />
-        <p className="text-sm text-ink">
-          <span className="font-cond font-bold uppercase tracking-label text-caution">Environmental hazard, not personal dose. </span>
-          Flare class, SEP and CME records describe the space environment near Earth. Personal exposure comes only from the dosimeter or a validated mission model. The{" "}
-          <a href="https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp" target="_blank" rel="noopener noreferrer" className="link">
-            Canadian Space Agency
-          </a>{" "}
-          notes that neutrons alone are about 30% of the radiation on the ISS, which is why it is developing a continuous on-board neutron monitor.
-        </p>
-      </div>
+      <p className="mt-4 flex items-center gap-1.5 text-xs text-caution">
+        <Radiation aria-hidden="true" className="h-3.5 w-3.5" />
+        <span className="font-cond font-bold uppercase tracking-label">Environment only, not personal dose</span>
+        <InfoTip label="Not a personal dose">
+          <p>Flare class, SEP and CME records describe the space environment near Earth. Personal exposure comes only from the dosimeter or a validated mission model.</p>
+          <p className="text-xs">
+            The{" "}
+            <a href="https://www.asc-csa.gc.ca/eng/news/articles/2026/2026-02-26-monitoring-radiation-astronaut-health.asp" target="_blank" rel="noopener noreferrer" className="link">
+              Canadian Space Agency
+            </a>{" "}
+            notes neutrons are about 30% of the radiation on the ISS.
+          </p>
+        </InfoTip>
+      </p>
 
       <details className="group mt-4 rounded-tile border border-line" open={rawOpen} onToggle={(e) => setRawOpen(e.currentTarget.open)}>
         <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2 px-3 py-2.5 [&::-webkit-details-marker]:hidden">
@@ -395,9 +401,6 @@ export function SpaceWeatherPanel() {
           )}
         </div>
       </details>
-      <p className="mt-2 text-2xs text-ink-3">
-        Source: NASA DONKI via the CCMC DONKI API (ccmc.gsfc.nasa.gov/DONKI-API) and api.nasa.gov. DONKI notes that NOAA's Space Weather Prediction Center is the official US source for space-weather forecasts. Only date ranges are sent; no health data leaves this browser.
-      </p>
     </Panel>
   );
 }

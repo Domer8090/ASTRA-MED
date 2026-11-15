@@ -5,12 +5,14 @@ import { useMissionStore } from "../hooks/useMissionState";
 import { useNow } from "../hooks/useNow";
 import { useSpaceWeather } from "../hooks/useSpaceWeather";
 import { useUiActions } from "../hooks/useUi";
+import { useTuesday } from "../hooks/useTuesday";
 import { formatLocalDate, formatLocalTime, formatMet, padDay } from "../utils/dates";
 import { BrandMark } from "./BrandMark";
 import { ReadinessIndicator } from "./ReadinessIndicator";
 import { ScenarioSelector } from "./ScenarioSelector";
 import { StatusIcon } from "./shared/StatusBadge";
 import { STATUS_TEXT_CLASS } from "../config/theme";
+import { TuesdayMark } from "./tuesday/TuesdayMark";
 import type { SpaceWeatherMode } from "../types/health";
 
 function Cell({ label, children, className = "" }: { label: string; children: React.ReactNode; className?: string }) {
@@ -102,6 +104,7 @@ export function TopTelemetryBar() {
               ? "via CCMC DONKI API"
               : "via api.nasa.gov";
   const { openSources } = useUiActions();
+  const tuesday = useTuesday();
 
   return (
     <header className="sticky top-0 z-30 border-b border-line bg-space">
@@ -134,6 +137,21 @@ export function TopTelemetryBar() {
         <div className="hidden items-center border-l border-line px-3 md:flex">
           <ScenarioSelector />
         </div>
+        <div className="hidden items-center border-l border-line px-3 lg:flex">
+          <button
+            type="button"
+            onClick={() => tuesday.setTuesdayMode(!tuesday.tuesdayMode)}
+            className={`flex items-center gap-1.5 rounded-tile border px-2.5 py-1 font-cond text-xs font-semibold transition-colors ${
+              tuesday.tuesdayMode
+                ? "border-tue bg-tue/20 text-tue"
+                : "border-line bg-raised text-tue hover:border-tue hover:bg-tue/10"
+            }`}
+            title="Switch to Tuesday mode"
+          >
+            <TuesdayMark className="h-4 w-4" />
+            <span>TUESDAY MODE</span>
+          </button>
+        </div>
         <Cell label="Network" className="hidden xl:flex">
           <span className={`flex items-center gap-1.5 font-cond text-sm font-bold tracking-status ${online ? "text-ink" : "text-caution"}`}>
             {online ? <Wifi aria-hidden="true" className="h-4 w-4" /> : <WifiOff aria-hidden="true" className="h-4 w-4" />}
@@ -162,6 +180,16 @@ export function TopTelemetryBar() {
       </div>
       <div className="flex items-center justify-between gap-2 border-t border-line px-3 py-1.5 md:hidden">
         <ScenarioSelector compact />
+        <button
+          type="button"
+          onClick={() => tuesday.setTuesdayMode(!tuesday.tuesdayMode)}
+          className={`flex items-center gap-1 rounded-tile border px-2 py-0.5 font-cond text-xs font-semibold ${
+            tuesday.tuesdayMode ? "border-tue bg-tue/20 text-tue" : "border-line bg-raised text-tue"
+          }`}
+        >
+          <TuesdayMark className="h-3.5 w-3.5" />
+          <span>Tuesday</span>
+        </button>
         <DemoDataChip onOpen={() => openSources("about")} />
         <span className={`flex items-center gap-1 font-cond text-xs font-bold ${online ? "text-ink-2" : "text-caution"}`}>
           {online ? <Wifi aria-hidden="true" className="h-3.5 w-3.5" /> : <WifiOff aria-hidden="true" className="h-3.5 w-3.5" />}

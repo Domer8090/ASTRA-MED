@@ -20,6 +20,7 @@ import {
 } from "../engine/tuesdayEngine";
 import { chooseModels, listLocalModels, streamChat, type ModelChoice } from "../services/localModel";
 import { createTuesdayStore, type TuesdayData, type TuesdayStore } from "../state/tuesdayStore";
+import { useTuesdaySpeech } from "./useTuesdaySpeech";
 import type { SourceRef } from "../types/health";
 import { useMissionModel } from "./useMissionModel";
 import { useOnlineStatus } from "./useOnlineStatus";
@@ -47,6 +48,11 @@ interface TuesdayValue {
   data: TuesdayData;
   open: boolean;
   setOpen: (open: boolean) => void;
+  tuesdayMode: boolean;
+  setTuesdayMode: (open: boolean) => void;
+  voiceLaunch: boolean;
+  startTalking: () => void;
+  consumeVoiceLaunch: () => void;
   recharge: RechargeMode | null;
   openRecharge: (mode: RechargeMode) => void;
   closeRecharge: () => void;
@@ -62,28 +68,12 @@ interface TuesdayValue {
   simulatedLos: boolean;
   setSimulatedLos: (los: boolean) => void;
   busy: boolean;
-  ask: (text: string, attachment?: Attachment) => Promise<void>;
+  ask: (text: string, attachment?: Attachment, voiceOutput?: (text: string) => void) => Promise<void>;
   stop: () => void;
   context: TuesdayContext;
 }
 
 const TuesdayContextValue = createContext<TuesdayValue | null>(null);
-
-function speak(text: string) {
-  try {
-    if (!("speechSynthesis" in window)) return;
-    // On-device voices only; network voices would send the text off the device.
-    const voice = window.speechSynthesis.getVoices().find((v) => v.localService && v.lang.startsWith("en"));
-    if (!voice) return;
-    window.speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text.replace(/\[\d+\]/g, "").replace(/\[Tuesday removed[^\]]*\]/g, ""));
-    u.voice = voice;
-    u.rate = 1.02;
-    window.speechSynthesis.speak(u);
-  } catch {
-    // Speech is optional.
-  }
-}
 
 function uniqueSources(list: (SourceRef | null)[]): SourceRef[] {
   const seen = new Set<string>();
@@ -91,14 +81,23 @@ function uniqueSources(list: (SourceRef | null)[]): SourceRef[] {
 }
 
 export function TuesdayProvider({ children }: { children: ReactNode }) {
+  const speech = useTuesdaySpeech();
   const [store] = useState(() => createTuesdayStore());
   const data = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const [open, setOpen] = useState(false);
+  const [tuesdayMode, setTuesdayMode] = useState(false);
+  const [voiceLaunch, setVoiceLaunch] = useState(false);
   const [recharge, setRecharge] = useState<RechargeMode | null>(null);
   const [checkIn, setCheckIn] = useState(false);
   const [busy, setBusy] = useState(false);
   const [contact, setContact] = useState<ContactRequest | null>(null);
   const [simulatedLos, setSimulatedLos] = useState(false);
+  const startTalking = useCallback(() => {
+    setOpen(false);
+    setTuesdayMode(true);
+    setVoiceLaunch(true);
+  }, []);
+  const consumeVoiceLaunch = useCallback(() => setVoiceLaunch(false), []);
   const online = useOnlineStatus();
   const linkUp = online && !simulatedLos;
   const [model, setModel] = useState<ModelStatus>({ state: "checking", installed: [], choice: { chat: null, medical: null } });
@@ -119,8 +118,8 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
   }, [endpoint, useModel, chatModel, medicalModel]);
 
   useEffect(() => {
-    if (open) refreshModels();
-  }, [open, refreshModels]);
+    if (open || tuesdayMode) refreshModels();
+  }, [open, tuesdayMode, refreshModels]);
 
   const recentEnergy = useMemo(() => [...data.activity].reverse().find((a) => a.kind === "checkin" && a.energy !== undefined)?.energy ?? null, [data.activity]);
   const context = useMemo<TuesdayContext>(
@@ -142,16 +141,17 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
   const stop = useCallback(() => abort.current?.abort(), []);
 
   const ask = useCallback(
-    async (text: string, attachment?: Attachment) => {
+    async (text: string, attachment?: Attachment, voiceOutput?: (text: string) => void) => {
       const question = text.trim() || (attachment?.kind === "lab" ? "Read this lab report." : attachment ? "Look at this photo." : "");
       if (!question || busy) return;
+      const outputVoice = voiceOutput ?? speech.speak;
       store.addMessage({ role: "user", text: question, ...(attachment ? { attachment: attachment.kind } : {}) });
       const intent = attachment ? "other" : detectIntent(question);
       const voice = store.getState().settings.voice;
 
       if (intent === "crisis") {
         store.addMessage({ role: "tuesday", text: CRISIS_REPLY, via: "core", actions: actionsFor("crisis", context) });
-        if (voice) speak(CRISIS_REPLY);
+        if (voice) outputVoice(CRISIS_REPLY);
         return;
       }
 
@@ -160,7 +160,7 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
       if (vitalsReply || intent === "urgent") {
         const reply = vitalsReply ?? { text: URGENT_REPLY, actions: actionsFor("urgent", context) };
         store.addMessage({ role: "tuesday", text: reply.text, via: "core", actions: reply.actions });
-        if (voice) speak(reply.text);
+        if (voice) outputVoice(reply.text);
         return;
       }
 
@@ -174,7 +174,7 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
             }
           : offlineReply(intent, context, passages);
         store.addMessage({ role: "tuesday", text: reply.text, via: "core", actions: reply.actions, sources: uniqueSources(passages.slice(0, 1).map((p) => p.doc.source)) });
-        if (voice) speak(reply.text);
+        if (voice) outputVoice(reply.text);
         return;
       }
 
@@ -237,9 +237,9 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
         sources: uniqueSources(passages.map((p) => p.doc.source)),
         ...(removed ? { filtered: removed } : {}),
       });
-      if (voice) speak(finalText);
+      if (voice) outputVoice(finalText);
     },
-    [busy, context, endpoint, model, store],
+    [busy, context, endpoint, model, store, speech.speak],
   );
 
   const value = useMemo<TuesdayValue>(
@@ -248,6 +248,11 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
       data,
       open,
       setOpen,
+      tuesdayMode,
+      setTuesdayMode,
+      voiceLaunch,
+      startTalking,
+      consumeVoiceLaunch,
       recharge,
       openRecharge: (mode) => setRecharge(mode),
       closeRecharge: () => setRecharge(null),
@@ -270,7 +275,7 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
       stop,
       context,
     }),
-    [store, data, open, recharge, checkIn, model, refreshModels, contact, linkUp, simulatedLos, m.overall.status, busy, ask, stop, context],
+    [store, data, open, tuesdayMode, voiceLaunch, startTalking, consumeVoiceLaunch, recharge, checkIn, model, refreshModels, contact, linkUp, simulatedLos, m.overall.status, busy, ask, stop, context],
   );
 
   return <TuesdayContextValue.Provider value={value}>{children}</TuesdayContextValue.Provider>;

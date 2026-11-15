@@ -38,6 +38,13 @@
   --c-raised: #111d31;
   --c-line: #1d344b;
   --c-cyan: #42d9f5;
+  --c-tue: #b9a6ff;
+  --c-tue-deep: #7461d8;
+  --c-ink-3: #647a93;
+  --c-ink: #e8f0fa;
+  --c-ink-2: #91a4ba;
+  --c-blue: #4c8dff;
+  --c-cyan-deep: #1b8fa6;
 
   --rail-w: 76px;
   --topbar-h: 56px;
@@ -69,7 +76,7 @@
   :focus-visible {
     outline: 2px solid theme("colors.cyan.DEFAULT");
     outline-offset: 2px;
-    border-radius: 3px;
+    border-radius: 8px;
   }
   button,
   [role="button"],

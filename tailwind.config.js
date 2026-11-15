@@ -33,7 +33,7 @@ export default {
         xl: ["28px", { lineHeight: "32px" }],
         "2xl": ["40px", { lineHeight: "42px" }],
       },
-      borderRadius: { badge: "3px", control: "4px", tile: "6px", panel: "10px" },
+      borderRadius: { DEFAULT: "6px", badge: "6px", control: "8px", tile: "12px", panel: "16px" },
       letterSpacing: { label: "0.06em", status: "0.08em" },
       transitionTimingFunction: {
         "smooth-out": "cubic-bezier(0.22, 1, 0.36, 1)",

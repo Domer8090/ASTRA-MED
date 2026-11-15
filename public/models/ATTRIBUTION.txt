@@ -1,0 +1,11 @@
+Z-Anatomy human anatomy atlas, adapted for ASTRA-MED
+
+Source: https://github.com/Z-Anatomy/Models-of-human-anatomy
+License: Creative Commons Attribution-ShareAlike 4.0 International (CC BY-SA 4.0)
+This app distributes a compressed GLB export of selected Z-Anatomy system meshes. Upstream non-commercial reference parts (including kidneys and inner-ear/cochlear structures) are excluded from the export.
+
+Required attribution:
+“BodyParts3D - The Database Center for Life Science - CC-BY-SA 2.1 Japan”
+“Z-Anatomy - The libre 3D atlas of anatomy - CC-BY-SA 4.0”
+
+The adapted export is distributed under CC BY-SA 4.0. See LICENSE-Z-ANATOMY.txt and the source repository for full license terms and upstream credits.

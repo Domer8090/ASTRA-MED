@@ -82,8 +82,10 @@ export default function EarthView({ poseRef, posesRef, onRound }: Props) {
     const el = mount.current;
     if (!el || !tex) return;
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+    // A capped backing buffer matters far more than antialiasing for a textured
+    // globe, especially on iPad/Retina where 2x pixels quadruple GPU work.
+    const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: "low-power" });
+    renderer.setPixelRatio(Math.min(1.25, window.devicePixelRatio));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     el.appendChild(renderer.domElement);
     renderer.domElement.className = "block h-full w-full touch-none";
@@ -92,7 +94,7 @@ export default function EarthView({ poseRef, posesRef, onRound }: Props) {
     const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
     const day = new THREE.CanvasTexture(tex.day);
     day.colorSpace = THREE.SRGBColorSpace;
-    day.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    day.anisotropy = Math.min(4, renderer.capabilities.getMaxAnisotropy());
     const nightCanvas = tex.night ?? document.createElement("canvas");
     const night = new THREE.CanvasTexture(nightCanvas);
     night.colorSpace = THREE.SRGBColorSpace;
@@ -110,7 +112,7 @@ export default function EarthView({ poseRef, posesRef, onRound }: Props) {
     const group = new THREE.Group();
     group.rotation.order = "XYZ";
     groupRef.current = group;
-    const globe = new THREE.Mesh(new THREE.SphereGeometry(1, 128, 96), material);
+    const globe = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 48), material);
     group.add(globe);
     const dots = new THREE.BufferGeometry();
     dots.setAttribute("position", new THREE.Float32BufferAttribute(EARTH_PLACES.flatMap((p) => latLonToVector(p.lat, p.lon).map((c) => c * 1.004)), 3));
@@ -119,7 +121,7 @@ export default function EarthView({ poseRef, posesRef, onRound }: Props) {
 
     const stars = new THREE.BufferGeometry();
     const sp: number[] = [];
-    for (let i = 0; i < 900; i++) {
+    for (let i = 0; i < 300; i++) {
       const v = new THREE.Vector3().randomDirection().multiplyScalar(30 + Math.random() * 20);
       sp.push(v.x, v.y, v.z);
     }
@@ -167,12 +169,24 @@ export default function EarthView({ poseRef, posesRef, onRound }: Props) {
     canvas.addEventListener("wheel", onWheel, { passive: false });
 
     let raf = 0;
+    let lastFrame = 0;
+    let inViewport = true;
+    const frameInterval = 1000 / 30;
+    const intersection = new IntersectionObserver(([entry]) => {
+      inViewport = Boolean(entry?.isIntersecting);
+    });
+    intersection.observe(el);
     let pinchFrom: { x: number; y: number } | null = null;
     let palmBase: number | null = null;
     let heldSince = 0;
     let lastLabel = 0;
     let twoFrom: { mid: { x: number; y: number }; spread: number; dist: number } | null = null;
     const tick = (now: number) => {
+      // Keep the globe smooth enough to manipulate while avoiding a full
+      // 60–120 Hz WebGL render loop. Hidden tabs and offscreen views do no work.
+      raf = requestAnimationFrame(tick);
+      if (document.visibilityState !== "visible" || !inViewport || now - lastFrame < frameInterval) return;
+      lastFrame = now;
       const both = posesRef.current;
       const pose = poseRef.current;
       if (both.length >= 2 && both[0]!.pinch && both[1]!.pinch) {
@@ -257,7 +271,6 @@ export default function EarthView({ poseRef, posesRef, onRound }: Props) {
         const lit = front.dot(material.uniforms.sunDir!.value as THREE.Vector3) > 0;
         setCenter(`Facing ${Math.abs(lat).toFixed(0)}° ${lat >= 0 ? "N" : "S"}, ${Math.abs(lon).toFixed(0)}° ${lon >= 0 ? "E" : "W"}, ${lit ? "in daylight" : "at night"} right now.`);
       }
-      raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
 
@@ -278,6 +291,7 @@ export default function EarthView({ poseRef, posesRef, onRound }: Props) {
 
     return () => {
       cancelAnimationFrame(raf);
+      intersection.disconnect();
       ro.disconnect();
       el.removeEventListener("keydown", onKey);
       canvas.removeEventListener("pointerdown", onDown);

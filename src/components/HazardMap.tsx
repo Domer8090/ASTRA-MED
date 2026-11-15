@@ -10,6 +10,7 @@ import { useUiActions } from "../hooks/useUi";
 import { wellbeingSummary } from "../state/tuesdayStore";
 import { scrollToSection } from "./navigation";
 import { StatusBadge } from "./shared/StatusBadge";
+import { InfoTip } from "./shared/InfoTip";
 
 const ICONS: Record<HazardId, LucideIcon> = {
   radiation: Radiation,
@@ -56,14 +57,16 @@ export function HazardMap() {
   return (
     <section id="hazards" aria-labelledby="hazards-title" className="panel scroll-mt-[var(--sticky-offset)] p-4">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h2 id="hazards-title" className="font-cond text-lg font-bold text-ink">
+        <h2 id="hazards-title" className="flex items-center gap-1 font-cond text-lg font-bold text-ink">
           Five hazards of human spaceflight
+          <InfoTip label="Five hazards">
+            What ASTRA-MED watches for each NASA Human Research Program hazard on day {m.day}. Statuses come from the same engine as the console; the mapping is ASTRA-MED&apos;s own.
+          </InfoTip>
         </h2>
         <a className="link text-xs" href={HRP_HAZARDS_URL} target="_blank" rel="noreferrer">
           NASA Human Research Program
         </a>
       </div>
-      <p className="mt-1 max-w-[90ch] text-sm text-ink-2">What ASTRA-MED watches for each hazard on day {m.day}. Statuses come from the same engine as the console; the mapping is ASTRA-MED's own.</p>
       <ul className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {cards.map((c) => {
           const Icon = ICONS[c.id];
@@ -72,6 +75,7 @@ export function HazardMap() {
               <div className="flex items-start gap-2">
                 <Icon aria-hidden="true" className={`mt-0.5 h-5 w-5 shrink-0 ${c.id === "isolation" ? "text-tue" : "text-cyan"}`} />
                 <h3 className="font-cond text-md font-bold leading-tight text-ink">{c.name}</h3>
+                <InfoTip label={c.name} className="-mt-0.5 ml-auto">{c.note}</InfoTip>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 {c.status ? <StatusBadge status={c.status} /> : null}
@@ -82,7 +86,6 @@ export function HazardMap() {
                   <li key={f}>{f}</li>
                 ))}
               </ul>
-              <p className="text-xs text-ink-3">{c.note}</p>
               <button type="button" className="btn btn-secondary mt-auto min-h-[32px] self-start px-2.5 text-xs" onClick={() => run(c.action)}>
                 {c.id === "isolation" ? <Globe2 aria-hidden="true" className="h-3.5 w-3.5 text-tue" /> : null}
                 {c.actionLabel}

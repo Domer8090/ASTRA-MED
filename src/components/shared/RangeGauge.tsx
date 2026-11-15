@@ -21,7 +21,7 @@ export const RangeGauge = memo(function RangeGauge({ tracks, values }: { tracks:
         return (
           <div key={t.label ?? i} className="flex items-center gap-1.5">
             {t.label ? <span className="w-6 font-cond text-[10px] font-semibold text-ink-3">{t.label}</span> : null}
-            <div className="relative h-[6px] flex-1 rounded-[2px] bg-[#16283B]">
+            <div className="relative h-[6px] flex-1 rounded-full bg-[#16283B]">
               {t.zones.map((z, k) => (
                 <span key={k} className="absolute inset-y-0" style={{ left: `${pos(z.from, t)}%`, width: `${pos(z.to, t) - pos(z.from, t)}%`, background: ZONE_FILL[z.kind] }} />
               ))}
@@ -32,7 +32,7 @@ export const RangeGauge = memo(function RangeGauge({ tracks, values }: { tracks:
                 />
               ) : null}
               {v !== undefined ? (
-                <span className="absolute -top-[3px] h-[12px] w-[3px] -translate-x-1/2 rounded-[1px] bg-ink ring-2 ring-panel" style={{ left: `${pos(v, t)}%` }} />
+                <span className="absolute -top-[3px] h-[12px] w-[3px] -translate-x-1/2 rounded-full bg-ink ring-2 ring-panel" style={{ left: `${pos(v, t)}%` }} />
               ) : null}
             </div>
           </div>

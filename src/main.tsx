@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { createMissionStore } from "./state/missionStore";
 import { isScenarioId } from "./data/scenarios";
+import { connectDesktop } from "./services/desktopBridge";
 import "./index.css";
 
 const root = document.getElementById("root");
@@ -17,6 +18,9 @@ if (scenarioParam && isScenarioId(scenarioParam)) store.setScenario(scenarioPara
 const dayParam = Number(params.get("day"));
 if (Number.isInteger(dayParam) && dayParam >= 1) store.setSelectedDay(dayParam);
 if (scenarioParam || params.has("day")) history.replaceState(null, "", window.location.pathname + window.location.hash);
+
+// Inside the Windows / Linux desktop app: File > Import readings and the View menu.
+connectDesktop(store);
 
 createRoot(root).render(
   <StrictMode>

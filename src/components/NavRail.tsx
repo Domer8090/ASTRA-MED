@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { Info, Stethoscope } from "lucide-react";
 import { useUiActions } from "../hooks/useUi";
+import { useTuesday } from "../hooks/useTuesday";
+import { TuesdayMark } from "./tuesday/TuesdayMark";
 import { BrandMark } from "./BrandMark";
 import { MEDICAL_OFFICER_HASH } from "../hooks/useView";
 import { NAV_ITEMS, scrollToSection, SOURCES_NAV, type SectionId } from "./navigation";
@@ -35,6 +37,7 @@ function useActiveSections(): ReadonlySet<SectionId> {
 export function NavRail() {
   const active = useActiveSections();
   const { openSources } = useUiActions();
+  const tuesday = useTuesday();
   const SourcesIcon = SOURCES_NAV.icon;
   return (
     <>
@@ -68,6 +71,18 @@ export function NavRail() {
           })}
         </ul>
         <div className="flex flex-col gap-1 border-t border-line px-2 py-3">
+          <button
+            type="button"
+            onClick={() => {
+              tuesday.setTuesdayMode(true);
+              scrollToSection("overview");
+            }}
+            title="Tuesday mode: voice logging, checklist and actions"
+            className="flex w-full flex-col items-center gap-1 rounded-tile border border-tue/40 bg-tue/10 px-1 py-2 font-cond text-2xs font-semibold text-tue transition-colors duration-150 hover:border-tue hover:bg-tue/20"
+          >
+            <TuesdayMark className="h-5 w-5" />
+            Tuesday mode
+          </button>
           <a
             href={MEDICAL_OFFICER_HASH}
             title="Ground dashboard for the medical officer"

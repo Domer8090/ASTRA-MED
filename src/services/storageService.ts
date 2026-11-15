@@ -19,6 +19,7 @@ export const STORAGE_KEYS = {
   enlilCache: "astra-med:v1:enlil-cache",
   onboarding: "astra-med:v1:onboarding",
   tuesday: "astra-med:v1:tuesday",
+  autoSync: "astra-med:v1:auto-sync",
 } as const;
 
 export type StorageKey = (typeof STORAGE_KEYS)[keyof typeof STORAGE_KEYS];

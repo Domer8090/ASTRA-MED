@@ -1,0 +1,9 @@
+{
+  "scenario": "cardiovascular",
+  "measurements": [
+    { "metricId": "heartRate", "missionDay": 118, "shipTime": "07:30", "value": "92" },
+    { "metricId": "bloodPressure", "missionDay": 118, "shipTime": "07:32", "systolic": "138", "diastolic": "86" },
+    { "metricId": "sleep", "missionDay": 118, "shipTime": "06:45", "value": "5.8" },
+    { "metricId": "heartRate", "missionDay": 118, "shipTime": "07:40", "value": "250" }
+  ]
+}

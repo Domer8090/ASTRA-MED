@@ -13,6 +13,7 @@ import type { BodySystemId, BodySystemState, EnvironmentAdvisory, HealthStatus, 
 import type { BaselineDrift } from "./baselineEngine";
 import type { RetrievedPassage } from "./retrieval";
 import type { TrendWatch } from "./trendEngine";
+import { formatWithUnit } from "../utils/formatting";
 
 export type TuesdayIntent =
   | "crisis"
@@ -246,6 +247,11 @@ export function buildHealthBrief(ctx: TuesdayContext): string {
   const lines = [`Mission day ${ctx.day}. Overall status: ${ctx.overall} (ASTRA-MED engine, prototype thresholds, synthetic data).`];
   const f = flagged(ctx);
   lines.push(f.length ? `Outside the configured demonstration range: ${f.map((d) => `${METRIC_GUIDANCE[d.metricId].name} ${d.status}: ${d.summary}`).join(" | ")}` : "All indicators inside their configured ranges.");
+  // Latest values, so a question like "how did I sleep" has a number to work with.
+  const latest = Object.values(ctx.diagnostics)
+    .filter((d) => d.latest && d.metricId !== "symptoms")
+    .map((d) => `${METRIC_GUIDANCE[d.metricId].name} ${formatWithUnit(d.metricId, d.latest!.value).replace(/\u00a0/g, " ")} (day ${d.latest!.missionDay}, ${d.status})`);
+  if (latest.length) lines.push(`Latest readings: ${latest.join("; ")}.`);
   const watch = (Object.values(ctx.systems) as BodySystemState[]).filter((s) => s.status !== "NOMINAL").map((s) => `${BODY_SYSTEMS[s.id].name} ${s.status}`);
   if (watch.length) lines.push(`Body systems to watch: ${watch.join(", ")}.`);
   if (ctx.trends.length) lines.push(`Trend watch: ${ctx.trends.map((t) => t.text).join(" ")}`);

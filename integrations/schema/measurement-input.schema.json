@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Domer8090/ASTRA-MED/integrations/schema/measurement-input.schema.json",
+  "title": "ASTRA-MED measurement input",
+  "description": "Readings for the ASTRA-MED core. Each row is validated with the same entry rules as the crew console; rejected rows are reported, never guessed.",
+  "type": "object",
+  "properties": {
+    "scenario": { "enum": ["nominal", "cardiovascular", "sep"], "description": "Synthetic baseline the readings are merged into." },
+    "day": { "type": "integer", "minimum": 1, "maximum": 180, "description": "Mission day to evaluate. Defaults to the last day with an accepted reading." },
+    "measurements": { "type": "array", "items": { "$ref": "#/$defs/measurement" } }
+  },
+  "required": ["measurements"],
+  "$defs": {
+    "measurement": {
+      "type": "object",
+      "properties": {
+        "metricId": { "enum": ["heartRate", "bloodPressure", "bloodGlucose", "bodyTemperature", "sleep", "mood", "aredMinutes", "radiation", "pvt", "hydration", "symptoms"] },
+        "missionDay": { "type": "integer", "minimum": 1, "maximum": 180 },
+        "shipTime": { "type": "string", "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$", "description": "Ship time (UTC), HH:MM." },
+        "value": { "type": "string", "description": "Number as text, in the unit the console uses (bpm, mg/dL, °C, h, 1–5, min, cumulative mSv, ms, L)." },
+        "systolic": { "type": "string" },
+        "diastolic": { "type": "string" },
+        "symptoms": {
+          "type": "object",
+          "properties": {
+            "blurredVision": { "type": "boolean" },
+            "headache": { "type": "boolean" },
+            "eyePressure": { "type": "boolean" },
+            "otherSymptom": { "type": "boolean" }
+          },
+          "required": ["blurredVision", "headache", "eyePressure", "otherSymptom"]
+        },
+        "glucoseContext": { "enum": ["fasting", "post-meal", "other"] },
+        "notes": { "type": "string", "maxLength": 280 }
+      },
+      "required": ["metricId", "missionDay", "shipTime"]
+    }
+  }
+}

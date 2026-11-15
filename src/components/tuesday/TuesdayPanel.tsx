@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { BookOpenCheck, Cpu, NotebookPen, Stethoscope, FileScan, FileText, Globe2, HeartPulse, ImagePlus, Orbit, Send, Settings2, Smile, Square, Wind, X } from "lucide-react";
+import { BookOpenCheck, Cpu, Mic, NotebookPen, Stethoscope, FileScan, FileText, Globe2, HeartPulse, ImagePlus, Orbit, Send, Settings2, Smile, Sparkles, Square, Wind, X } from "lucide-react";
 import { METRIC_GUIDANCE } from "../../data/metricGuidance";
 import type { TuesdayAction } from "../../engine/tuesdayEngine";
 import { useMediaQuery } from "../../hooks/useMediaQuery";
@@ -8,6 +8,7 @@ import { MEDICAL_OFFICER_HASH } from "../../hooks/useView";
 import { useUiActions } from "../../hooks/useUi";
 import { compressImage, isLocalEndpoint } from "../../services/localModel";
 import { wellbeingSummary, type TuesdayMessage } from "../../state/tuesdayStore";
+import { scrollToSection } from "../navigation";
 import { Dialog } from "../shared/Dialog";
 import { SurgeonReportDialog } from "../SurgeonReportDialog";
 import { CheckInCard } from "./CheckInCard";
@@ -135,7 +136,7 @@ function MessageRow({ m, last, onReport }: { m: TuesdayMessage; last: boolean; o
 }
 
 function TodayCard() {
-  const { context, data, openRecharge, setCheckIn } = useTuesday();
+  const { context, data, openRecharge, setCheckIn, setOpen, setTuesdayMode } = useTuesday();
   const week = wellbeingSummary(data.activity, context.day);
   const hour = new Date().getHours();
   const hello = hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening";
@@ -158,6 +159,18 @@ function TodayCard() {
         {week.averageAfter !== null ? `, feeling ${week.averageAfter.toFixed(1)}/5 afterwards` : ""}.
       </p>
       <div className="mt-2 flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          className="btn min-h-[32px] border-tue/50 bg-tue/10 px-2.5 text-xs text-tue hover:bg-tue/20"
+          onClick={() => {
+            setOpen(false);
+            setTuesdayMode(true);
+            scrollToSection("overview");
+          }}
+        >
+          <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-tue" />
+          Tuesday mode
+        </button>
         <button type="button" className="btn btn-primary min-h-[32px] px-2.5 text-xs" onClick={() => setCheckIn(true)}>
           <Smile aria-hidden="true" className="h-3.5 w-3.5" />
           Check in
@@ -222,7 +235,7 @@ function SettingsBox() {
           </>
         ) : null}
         <p className="text-xs text-ink-2">
-          Recommended: Qwen3 8B for conversation (<code className="num">ollama pull qwen3:8b</code>) and MedGemma 1.5 4B for photos and lab reports. Without a model, Tuesday answers from onboard rules and the protocol library.
+          Recommended for fast voice routing: Qwen3 4B (<code className="num">ollama pull qwen3:4b</code>) and MedGemma 1.5 4B for photos and lab reports. Without a model, Tuesday answers from onboard rules and the protocol library.
         </p>
         <label className="flex items-center gap-2">
           <input type="checkbox" checked={data.settings.voice} onChange={(e) => store.updateSettings({ voice: e.target.checked })} />
@@ -374,18 +387,25 @@ export function TuesdayPanel() {
 }
 
 export function TuesdayLauncher() {
-  const { open, setOpen } = useTuesday();
-  if (open) return null;
+  const { open, tuesdayMode, startTalking } = useTuesday();
+  if (open || tuesdayMode) return null;
   return (
     <button
       type="button"
       className="fixed bottom-[88px] right-4 z-30 flex min-h-[48px] items-center gap-2 rounded-full border border-tue/60 bg-raised py-1.5 pl-2 pr-4 font-cond text-md font-semibold text-ink hover:border-tue lg:bottom-5"
-      aria-haspopup="dialog"
+      aria-controls="overview"
       data-tour="tuesday"
-      onClick={() => setOpen(true)}
+      aria-label="Talk to Tuesday. Opens voice mode and starts listening."
+      title="Open Tuesday voice mode"
+      onClick={() => {
+        startTalking();
+        scrollToSection("overview");
+      }}
     >
-      <TuesdayMark className="h-8 w-8" />
-      Tuesday
+      <span className="flex h-9 w-9 items-center justify-center rounded-full bg-tue/10 text-tue">
+        <Mic aria-hidden="true" className="h-5 w-5" />
+      </span>
+      Talk to Tuesday
     </button>
   );
 }

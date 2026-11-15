@@ -141,7 +141,7 @@ export function RechargeDeck() {
                   type="button"
                   role="tab"
                   aria-selected={recharge === m.id}
-                  className={`flex min-h-[36px] items-center gap-1.5 rounded-[3px] px-3 font-cond text-sm font-semibold ${recharge === m.id ? "bg-raised text-ink ring-1 ring-inset ring-tue-deep" : "text-ink-2 hover:text-ink"}`}
+                  className={`flex min-h-[36px] items-center gap-1.5 rounded-badge px-3 font-cond text-sm font-semibold ${recharge === m.id ? "bg-raised text-ink ring-1 ring-inset ring-tue-deep" : "text-ink-2 hover:text-ink"}`}
                   onClick={() => switchMode(m.id)}
                 >
                   <m.icon aria-hidden="true" className={`h-4 w-4 ${recharge === m.id ? "text-tue" : ""}`} />

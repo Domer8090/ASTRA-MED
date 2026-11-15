@@ -1,5 +1,5 @@
 import { lazy, Suspense, useMemo } from "react";
-import { MISSION, MOOD } from "../config/thresholds";
+import { MISSION } from "../config/thresholds";
 import { useMissionModel } from "../hooks/useMissionModel";
 import { useMissionStore } from "../hooks/useMissionState";
 import { buildChartRows, eventAnnotations, statusPeriods, windowRange, type ChartRow, type StatusPeriod } from "../services/chartSeries";
@@ -60,7 +60,7 @@ export function TrendChartsPanel() {
     <Panel
       id="trends"
       title="Physiological trend"
-      subtitle="Follows the selected system. Green band: configured reference range (demo safe zone, not a NASA standard). Click the chart to jump to a day."
+      subtitle={<><p>Follows the selected system. Click the chart to jump to a day.</p><p>Green band: configured reference range (prototype value, not a NASA standard). Shaded bands: days rated CAUTION or CRITICAL. Data stops at the selected day.</p></>}
       actions={
         <>
           <ProvenanceTag kind="SYNTHETIC" label="SYNTHETIC DEMO TELEMETRY" />
@@ -126,13 +126,10 @@ export function TrendChartsPanel() {
         {annotations.length ? (
           <p className="mt-1 text-xs text-ink-2">
             <span className="font-semibold text-ink">Annotated events: </span>
-            {annotations.map((a) => `${a.label} (day ${a.start}${a.end > a.start ? `–${a.end}` : ""})`).join("; ")}. Dashed outlines; scenario events are simulations.
+            {annotations.map((a) => `${a.label} (day ${a.start}${a.end > a.start ? `–${a.end}` : ""})`).join("; ")}.
           </p>
         ) : null}
-        <p className="mt-1 text-2xs text-ink-3">
-          Shaded vertical bands mark days the diagnostic engine rated CAUTION or CRITICAL. Green bands are configured reference ranges (prototype assumptions, not NASA safe zones). Data stops at the selected day. Ranges for mood: {MOOD.reference.min}–{MOOD.reference.max} / 5.
-          {tab.id === "radiation" ? " Daily dose comes from the synthetic personal dosimeter. Space-weather events never add to it." : ""}
-        </p>
+        {tab.id === "radiation" ? <p className="mt-1 text-2xs text-ink-3">Daily dose comes from the synthetic personal dosimeter. Space-weather events never add to it.</p> : null}
       </div>
     </Panel>
   );

@@ -19,7 +19,7 @@ export function Segmented<T extends string | number>({ label, value, options, on
           <label
             key={String(o.value)}
             title={o.hint}
-            className={`relative cursor-pointer rounded-[3px] px-2.5 py-1 font-cond text-sm font-semibold transition-colors duration-150 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-cyan ${
+            className={`relative cursor-pointer rounded-badge px-2.5 py-1 font-cond text-sm font-semibold transition-colors duration-150 has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-cyan ${
               checked ? "bg-raised text-ink shadow-[inset_0_0_0_1px_#2A4A68]" : "text-ink-2 hover:text-ink"
             }`}
           >

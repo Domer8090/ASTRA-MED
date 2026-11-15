@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { Fragment, memo, useMemo } from "react";
 import {
   Area,
   Bar,
@@ -41,6 +41,8 @@ function ChartTooltip({ active, payload, label, tab }: TooltipContentProps<numbe
         const v = row?.[s.key];
         if (typeof v !== "number") return null;
         const manual = s.manualKey && typeof row?.[s.manualKey] === "number";
+        const tuesdayKey = s.manualKey?.replace(/Manual$/, "Tuesday");
+        const tuesday = tuesdayKey && typeof row?.[tuesdayKey] === "number";
         return (
           <p key={s.key} className="flex items-center gap-2 text-ink">
             <span className="inline-block h-2 w-2 rounded-full" style={{ background: s.color }} />
@@ -48,11 +50,11 @@ function ChartTooltip({ active, payload, label, tab }: TooltipContentProps<numbe
             <span className="num ml-auto pl-3 font-medium">
               {formatNumber(v, s.decimals)} {s.unit}
             </span>
-            {manual ? <span className="chip-tag border-cyan/50 text-cyan">MANUAL</span> : null}
+            {tuesday ? <span className="chip-tag border-tue/50 text-tue">TUESDAY</span> : manual ? <span className="chip-tag border-cyan/50 text-cyan">MANUAL</span> : null}
           </p>
         );
       })}
-      <p className="mt-1 text-2xs text-ink-3">{row && tab.series.some((s) => s.manualKey && typeof row[s.manualKey] === "number") ? "Includes a manual entry." : "Synthetic demo telemetry."}</p>
+      <p className="mt-1 text-2xs text-ink-3">{row && tab.series.some((s) => s.manualKey && typeof row[s.manualKey.replace(/Manual$/, "Tuesday")] === "number") ? "Includes a Tuesday voice log." : row && tab.series.some((s) => s.manualKey && typeof row[s.manualKey] === "number") ? "Includes a manual entry." : "Synthetic demo telemetry."}</p>
     </div>
   );
 }
@@ -217,7 +219,10 @@ const TrendChart = memo(function TrendChart({
         {tab.series
           .filter((s) => s.manualKey)
           .map((s) => (
-            <Scatter key={`${s.key}-m`} yAxisId={s.axis ?? "left"} dataKey={s.manualKey!} name="Manual entry" fill={COLORS.ink} stroke={COLORS.cyan} strokeWidth={2} shape="circle" legendType={s === tab.series.find((x) => x.manualKey) ? "circle" : "none"} isAnimationActive={false} />
+            <Fragment key={`${s.key}-crew-entry`}>
+              <Scatter yAxisId={s.axis ?? "left"} dataKey={s.manualKey!} name="Manual entry" fill={COLORS.ink} stroke={COLORS.cyan} strokeWidth={2} shape="circle" legendType={s === tab.series.find((x) => x.manualKey) ? "circle" : "none"} isAnimationActive={false} />
+              <Scatter yAxisId={s.axis ?? "left"} dataKey={s.manualKey!.replace(/Manual$/, "Tuesday")} name="Tuesday voice log" fill={COLORS.ink} stroke={COLORS.tue} strokeWidth={2} shape="diamond" legendType="none" isAnimationActive={false} />
+            </Fragment>
           ))}
       </ComposedChart>
     </ResponsiveContainer>

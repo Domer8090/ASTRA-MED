@@ -3,6 +3,7 @@ import { useMissionState } from "../hooks/useMissionState";
 import { useSpaceWeather } from "../hooks/useSpaceWeather";
 import { useUiActions } from "../hooks/useUi";
 import { AlertsPanel } from "./AlertsPanel";
+import { AutoSyncPanel } from "./AutoSyncPanel";
 import { CountermeasureGamification } from "./CountermeasureGamification";
 import { DataSourcesModal } from "./DataSourcesModal";
 import { GuidanceDrawer } from "./GuidanceDrawer";
@@ -94,6 +95,9 @@ export function AppShell() {
               <AlertsPanel />
             </PanelBoundary>
           </div>
+          <PanelBoundary name="Auto Sync">
+            <AutoSyncPanel />
+          </PanelBoundary>
           <PanelBoundary name="Space weather">
             <SpaceWeatherPanel />
           </PanelBoundary>

@@ -11,7 +11,7 @@
  * No health data is sent. Failures fall back to a drawn globe and never throw.
  */
 
-function loadImage(url: string, timeoutMs = 20_000): Promise<HTMLImageElement | null> {
+function loadImage(url: string, timeoutMs = 8_000): Promise<HTMLImageElement | null> {
   return new Promise((resolve) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
@@ -30,8 +30,8 @@ function loadImage(url: string, timeoutMs = 20_000): Promise<HTMLImageElement | 
 }
 
 export interface EarthTextures {
-  day: HTMLCanvasElement;
-  night: HTMLCanvasElement | null;
+  day: HTMLImageElement | HTMLCanvasElement;
+  night: HTMLImageElement | HTMLCanvasElement | null;
   source: "bundled" | "drawn";
 }
 
@@ -61,25 +61,15 @@ function drawnGlobe(width: number, height: number): HTMLCanvasElement {
   return c;
 }
 
-/** Load the bundled day and night textures. */
+/** Load the bundled day and night textures without copying decoded images to canvases. */
 export async function loadEarthTextures(): Promise<EarthTextures> {
   const base = import.meta.env.BASE_URL;
   const [day, lights] = await Promise.all([loadImage(`${base}earth/blue-marble.jpg`), loadImage(`${base}earth/city-lights.jpg`)]);
-  const width = day?.naturalWidth || 2048;
-  const height = day?.naturalHeight || 1024;
   return {
-    day: day ? toCanvas(day, width, height) : drawnGlobe(width, height),
-    night: lights ? toCanvas(lights, width, height) : null,
+    day: day ?? drawnGlobe(2048, 1024),
+    night: lights,
     source: day ? "bundled" : "drawn",
   };
-}
-
-function toCanvas(img: HTMLImageElement, width: number, height: number): HTMLCanvasElement {
-  const c = document.createElement("canvas");
-  c.width = width;
-  c.height = height;
-  c.getContext("2d")!.drawImage(img, 0, 0, width, height);
-  return c;
 }
 
 export interface EpicImage {

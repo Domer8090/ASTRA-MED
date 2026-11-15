@@ -1,21 +1,23 @@
 import { useMemo } from "react";
-import { BookOpen, CircleCheck, PencilLine, Radiation } from "lucide-react";
+import { Bluetooth, BookOpen, CircleCheck, Mic, PencilLine, Radiation } from "lucide-react";
 import { METRIC_GUIDANCE } from "../data/metricGuidance";
 import { useMissionModel } from "../hooks/useMissionModel";
 import { useUiActions } from "../hooks/useUi";
-import { ALL_METRIC_IDS, type HealthStatus } from "../types/health";
+import { ALL_METRIC_IDS, type HealthStatus, type MeasurementSource } from "../types/health";
 import { padDay } from "../utils/dates";
 import { formatWithUnit } from "../utils/formatting";
 import { Panel } from "./shared/Panel";
 import { ProvenanceTag } from "./shared/ProvenanceTag";
+import { provenanceForSource } from "./shared/provenanceForSource";
 import { BasisLine } from "./shared/BasisLine";
 import { StatusBadge, StatusIcon } from "./shared/StatusBadge";
 
 interface TimelineItem {
   key: string;
   day: number;
-  kind: "status" | "manual" | "scenario";
+  kind: "status" | "manual" | "tuesday" | "device" | "scenario";
   status?: HealthStatus;
+  source?: MeasurementSource;
   text: string;
 }
 
@@ -47,7 +49,14 @@ export function AlertsPanel() {
     }
     for (const m of measurements) {
       if (m.missionDay >= from && m.missionDay <= day) {
-        items.push({ key: m.id, day: m.missionDay, kind: "manual", text: `Logged ${METRIC_GUIDANCE[m.metricId].name.toLowerCase()}: ${formatWithUnit(m.metricId, m.value)}` });
+        const workout = m.metricId === "aredMinutes";
+        items.push({
+          key: m.id,
+          day: m.missionDay,
+          kind: m.source === "tuesday" ? "tuesday" : m.source === "device" || m.source === "device-sim" ? "device" : "manual",
+          source: m.source,
+          text: `${workout ? "Logged workout (ARED)" : `Logged ${METRIC_GUIDANCE[m.metricId].name.toLowerCase()}`}: ${formatWithUnit(m.metricId, m.value)}`,
+        });
       }
     }
     for (const e of scenario.events) {
@@ -144,11 +153,15 @@ export function AlertsPanel() {
                   </span>
                 ) : t.kind === "manual" ? (
                   <PencilLine aria-hidden="true" className="h-3.5 w-3.5 text-cyan" />
+                ) : t.kind === "tuesday" ? (
+                  <Mic aria-hidden="true" className="h-3.5 w-3.5 text-tue" />
+                ) : t.kind === "device" ? (
+                  <Bluetooth aria-hidden="true" className="h-3.5 w-3.5 text-nominal" />
                 ) : (
                   <Radiation aria-hidden="true" className="h-3.5 w-3.5 text-blue" />
                 )}
                 <span className="text-ink">{t.text}</span>
-                {t.kind === "manual" ? <ProvenanceTag kind="MANUAL" /> : t.kind === "scenario" ? <ProvenanceTag kind="SCENARIO" /> : null}
+                {t.kind === "manual" ? <ProvenanceTag kind="MANUAL" /> : t.kind === "tuesday" ? <ProvenanceTag kind="TUESDAY" /> : t.kind === "device" && t.source ? <ProvenanceTag kind={provenanceForSource(t.source)} /> : t.kind === "scenario" ? <ProvenanceTag kind="SCENARIO" /> : null}
               </p>
             </li>
           ))}

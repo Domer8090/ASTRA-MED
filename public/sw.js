@@ -4,7 +4,7 @@
  * Earth textures are precached; the hand-tracking runtime and model are cached on first use.
  * Cross-origin requests (NASA DONKI) are never cached here; the app keeps its own validated cache.
  */
-const VERSION = "astra-med-v2";
+const VERSION = "astra-med-v6";
 const SHELL = ["./", "./index.html", "./favicon.svg", "./offline/donki-fallback.json", "./earth/blue-marble.jpg", "./earth/city-lights.jpg"];
 
 self.addEventListener("install", (event) => {
@@ -49,7 +49,7 @@ self.addEventListener("fetch", (event) => {
       (hit) =>
         hit ||
         fetch(req).then((res) => {
-          if (res.ok && (url.pathname.includes("/assets/") || /\.(js|css|woff2?|svg|json|jpg|wasm|task)$/.test(url.pathname))) {
+          if (res.ok && (url.pathname.includes("/assets/") || /\.(js|css|woff2?|svg|json|jpg|wasm|task|glb)$/.test(url.pathname))) {
             const copy = res.clone();
             caches.open(VERSION).then((c) => c.put(req, copy));
           }

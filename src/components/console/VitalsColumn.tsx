@@ -10,7 +10,7 @@ import { sparkValues } from "../../services/chartSeries";
 import { PRIMARY_METRIC_IDS, type MetricDiagnostic, type MetricId } from "../../types/health";
 import { padDay } from "../../utils/dates";
 import { formatDelta, formatDose, formatMetricValue, isBloodPressure, METRIC_UNITS } from "../../utils/formatting";
-import { ProvenanceTag } from "../shared/ProvenanceTag";
+import { InfoTip } from "../shared/InfoTip";
 import { RangeGauge } from "../shared/RangeGauge";
 import { Sparkline } from "../shared/Sparkline";
 import { StatusIcon } from "../shared/StatusBadge";
@@ -103,13 +103,17 @@ export function VitalsColumn() {
   return (
     <section aria-labelledby="vitals-title" id="vitals" className="panel flex min-w-0 flex-col">
       <header className="flex items-center justify-between gap-2 border-b border-line px-4 py-2.5">
-        <div>
+        <div className="flex items-center gap-1">
           <h2 id="vitals-title" className="font-cond text-md font-bold uppercase tracking-label text-ink">
             Crew vitals
           </h2>
-          <p className="text-2xs text-ink-3">
-            Day <span className="num">{padDay(day)}</span>. Highlighted rows belong to {system.shortName.toLowerCase()}.
-          </p>
+          <InfoTip label="Crew vitals">
+            <p>
+              Latest reading of each indicator on day <span className="num">{padDay(day)}</span>. Highlighted rows belong to the selected system ({system.shortName.toLowerCase()}). Select a row to see its detail.
+            </p>
+            <p>Bar: green is the reference range, amber caution, red critical. The number under the value is the change since the last reading.</p>
+            <p>Values are synthetic demo telemetry unless marked MANUAL or TUESDAY.</p>
+          </InfoTip>
         </div>
         <button type="button" className="btn btn-primary min-h-[32px] px-2.5 text-xs" onClick={() => openLog({ metricId: selectedMetric ?? system.metrics[0] ?? "heartRate", day })}>
           <Plus aria-hidden="true" className="h-3.5 w-3.5" />
@@ -125,9 +129,6 @@ export function VitalsColumn() {
           <ul className="flex flex-col gap-1">{extra.map(row)}</ul>
         </div>
       ) : null}
-      <p className="mt-auto flex items-center gap-2 border-t border-line px-4 py-2 text-2xs text-ink-3">
-        <ProvenanceTag kind="SYNTHETIC" /> demo telemetry unless marked MANUAL. Gauges: green reference, amber caution, rose critical.
-      </p>
     </section>
   );
 }

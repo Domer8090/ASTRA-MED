@@ -1,0 +1,10 @@
+{
+  "name": "astra-med-desktop",
+  "productName": "ASTRA-MED",
+  "version": "1.0.0",
+  "description": "ASTRA-MED offline astronaut health console for Windows and Linux (NASA Space Apps Challenge 2026 prototype)",
+  "main": "main.cjs",
+  "author": "ASTRA-MED team",
+  "homepage": "https://github.com/Domer8090/ASTRA-MED",
+  "private": true
+}

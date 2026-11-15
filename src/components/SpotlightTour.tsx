@@ -181,7 +181,7 @@ function Tour({ onEnd }: { onEnd: () => void }) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="t-fade-in panel fixed border border-cyan/60 p-4 outline-none"
+        className="t-fade-in panel fixed rounded-panel border border-cyan/60 p-4 outline-none"
         style={cardStyle(hole)}
       >
         <div className="flex items-start justify-between gap-3">
