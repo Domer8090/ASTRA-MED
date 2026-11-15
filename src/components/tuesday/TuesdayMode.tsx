@@ -145,7 +145,7 @@ export function TuesdayMode({ onClose }: TuesdayModeProps) {
       </div>
 
       <div className="grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <section aria-label={T.conversation} className="flex min-w-0 flex-col gap-3 rounded-panel border border-line bg-space p-3 sm:p-4">
+        <section data-pitch="tuesday-mode" aria-label={T.conversation} className="flex min-w-0 flex-col gap-3 rounded-panel border border-line bg-space p-3 sm:p-4">
           <div className="flex flex-col items-center gap-1">
             <TuesdayCore state={coreState} level={voice.audioLevel} getAnalyser={voice.getAnalyser} maxSize={240} />
             <div aria-live="polite" className="text-center">

@@ -20,6 +20,7 @@ import { DeepLinks } from "./DeepLinks";
 import { PanelBoundary } from "./shared/ErrorBoundary";
 import { SpaceWeatherPanel } from "./SpaceWeatherPanel";
 import { SpotlightTour } from "./SpotlightTour";
+import { PitchMode } from "./PitchMode";
 import { TopTelemetryBar } from "./TopTelemetryBar";
 import { RechargeDeck } from "./recharge/RechargeDeck";
 import { TuesdayLauncher, TuesdayPanel } from "./tuesday/TuesdayPanel";
@@ -123,6 +124,7 @@ export function AppShell() {
       <MeasurementForm />
       <DataSourcesModal />
       <SpotlightTour />
+      <PitchMode />
       <TuesdayLauncher />
       <TuesdayPanel />
       <RechargeDeck />

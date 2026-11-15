@@ -201,7 +201,7 @@ function IssueCard({ issue }: { issue: SummaryIssue }) {
     case "trend": {
       const t = issue.trend;
       return (
-        <article className={`${CARD} flex flex-col gap-3 p-5`}>
+        <article data-pitch="trend" className={`${CARD} flex flex-col gap-3 p-5`}>
           <p className={`${tag} text-cyan`}>
             <TrendingUp aria-hidden="true" className="h-5 w-5" />
             {SUMMARY_COPY.trendTag}

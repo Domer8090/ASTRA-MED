@@ -4,6 +4,7 @@ import App from "./App";
 import { createMissionStore } from "./state/missionStore";
 import { isScenarioId } from "./data/scenarios";
 import { connectDesktop } from "./services/desktopBridge";
+import { requestPitchOnLoad } from "./state/pitchRequest";
 import "./index.css";
 
 const root = document.getElementById("root");
@@ -17,7 +18,9 @@ const scenarioParam = params.get("scenario");
 if (scenarioParam && isScenarioId(scenarioParam)) store.setScenario(scenarioParam);
 const dayParam = Number(params.get("day"));
 if (Number.isInteger(dayParam) && dayParam >= 1) store.setSelectedDay(dayParam);
-if (scenarioParam || params.has("day")) history.replaceState(null, "", window.location.pathname + window.location.hash);
+// ?pitch starts the presenter walkthrough (Shift+P also toggles it) and stays in the address so a reload restarts it.
+if (params.has("pitch")) requestPitchOnLoad();
+if (scenarioParam || params.has("day")) history.replaceState(null, "", window.location.pathname + (params.has("pitch") ? "?pitch" : "") + window.location.hash);
 
 // Inside the Windows / Linux desktop app: File > Import readings and the View menu.
 connectDesktop(store);
@@ -29,7 +32,10 @@ createRoot(root).render(
 );
 
 // Cache the app shell for offline use. Production builds only; dev stays uncached.
-if (import.meta.env.PROD && "serviceWorker" in navigator) {
+// Pitch mode skips the offline cache so a rebuild always shows at once.
+if (params.has("pitch") && "serviceWorker" in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => regs.forEach((r) => r.unregister())).catch(() => {});
+} else if (import.meta.env.PROD && "serviceWorker" in navigator) {
   window.addEventListener("load", () => {
     navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => {
       /* Offline caching is optional; the app works without it. */

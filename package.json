@@ -2,7 +2,7 @@
   "name": "astra-med",
   "private": true,
   "version": "1.0.0",
-  "description": "ASTRA-MED — offline-first astronaut health monitoring console (NASA Space Apps Challenge 2026 prototype)",
+  "description": "ASTRA-MED \u2014 offline-first astronaut health monitoring console (NASA Space Apps Challenge 2026 prototype)",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -24,7 +24,8 @@
     "desktop:prepare": "npm run typecheck && vite build --outDir desktop/web --emptyOutDir && node scripts/desktop-prepare.mjs",
     "desktop:start": "npm run desktop:prepare && electron desktop",
     "desktop:dist:win": "npm run desktop:prepare && electron-builder --projectDir desktop --win",
-    "desktop:dist:linux": "npm run desktop:prepare && electron-builder --projectDir desktop --linux"
+    "desktop:dist:linux": "npm run desktop:prepare && electron-builder --projectDir desktop --linux",
+    "pitch": "vite build && vite preview --open \"/?pitch\""
   },
   "dependencies": {
     "@fontsource/barlow": "^5.3.0",

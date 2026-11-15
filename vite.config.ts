@@ -33,7 +33,7 @@ export default defineConfig({
   base: process.env.VITE_BASE ?? "/",
   plugins: [react(), mediapipeWasm()],
   server: { port: 5173, strictPort: true },
-  preview: { port: 4173, strictPort: true },
+  preview: { port: 4173, strictPort: false },
   build: {
     target: "es2022",
     sourcemap: false,
