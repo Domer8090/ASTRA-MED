@@ -10,12 +10,12 @@ interface Props {
 
 const ONE = [
   { icon: HandGrab, title: "Pinch to grab", text: "Touch thumb and index finger. On Earth, keep pinching and move to turn the globe. In Orbit Catch, pinch over a pod to collect it." },
-  { icon: ZoomIn, title: "Zoom with buttons", text: "Use + and − on Earth, or pinch with both hands and pull apart. A relaxed hand never moves anything." },
+  { icon: ZoomIn, title: "Fist to zoom in, open to zoom out", text: "On Earth, hold a fist to zoom in and an open hand, fingers spread, to zoom out. A relaxed hand does nothing." },
   { icon: Hand, title: "Open and close to breathe", text: "In Breathe, open your hand as you breathe in and close it as you breathe out." },
 ];
 
 const TWO = [
-  { icon: ZoomIn, title: "Pull apart to zoom", text: "Pinch with both hands, then move them apart to zoom in or together to zoom out." },
+  { icon: ZoomIn, title: "Fists to zoom in, open to zoom out", text: "Hold fists to zoom in and open hands to zoom out. One fist and one open hand cancel out." },
   { icon: Move, title: "Move together to turn", text: "Keep both hands pinched and move them the same way to turn the globe." },
   { icon: HandGrab, title: "Catch with either hand", text: "In Orbit Catch each hand has its own cursor. In Breathe, open and close both hands." },
 ];

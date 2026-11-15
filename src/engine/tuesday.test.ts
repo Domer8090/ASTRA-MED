@@ -5,7 +5,7 @@ import { chooseModels, isLocalEndpoint } from "../services/localModel";
 import { memoryBackend, createStorageService, STORAGE_KEYS } from "../services/storageService";
 import { createTuesdayStore, sanitizeTuesday, wellbeingSummary } from "../state/tuesdayStore";
 import { anomalyScore, baselineDrift, trainIsolationForest } from "./baselineEngine";
-import { HAND_CONNECTIONS, handSpread, readHandPose, type Landmark } from "./gestures";
+import { HAND_CONNECTIONS, handsZoomIntent, handZoomIntent, readHandPose, type Landmark } from "./gestures";
 import { retrieve } from "./retrieval";
 import { gaussian, mulberry32 } from "../utils/prng";
 import { latLonToVector, subsolarPoint } from "./sunPosition";
@@ -170,6 +170,22 @@ describe("hand pose", () => {
     expect(readHandPose(lm)!.cursor).toEqual({ x: 0.8, y: 0.3 });
   });
 
+  it("zooms Earth by hand shape: fist in, open hand out, relaxed hand or pinch nothing", () => {
+    const fist = readHandPose(hand(0.05, 0.02))!;
+    const open = readHandPose(hand(0.35, 0.2))!;
+    const pinch = readHandPose(hand(0.35, 0.02))!;
+    const relaxed = readHandPose(hand(0.28, 0.2))!;
+    expect(fist.pinch).toBe(true);
+    expect(handZoomIntent(fist)).toBe("in");
+    expect(handZoomIntent(open)).toBe("out");
+    expect(handZoomIntent(pinch)).toBeNull();
+    expect(handZoomIntent(relaxed)).toBeNull();
+    expect(handsZoomIntent([fist, fist])).toBe("in");
+    expect(handsZoomIntent([open, relaxed])).toBe("out");
+    expect(handsZoomIntent([fist, open])).toBeNull();
+    expect(handsZoomIntent([])).toBeNull();
+  });
+
   it("measures how open the hand is", () => {
     expect(readHandPose(hand(0.35, 0.2))!.openness).toBeGreaterThan(0.85);
     expect(readHandPose(hand(0.05, 0.2))!.openness).toBe(0);
@@ -275,9 +291,7 @@ describe("medical officer message and hazard map", () => {
 });
 
 describe("two hands and the ground loop", () => {
-  it("measures the spread between two hand cursors and draws a 21-point skeleton", () => {
-    const pose = (x: number, y: number) => ({ cursor: { x, y }, pinch: true, extended: 4, open: false, fist: false, openness: 1, palmSize: 0.2 });
-    expect(handSpread(pose(0.2, 0.5), pose(0.5, 0.9))).toBeCloseTo(0.5);
+  it("draws a 21-point skeleton", () => {
     const points = new Set(HAND_CONNECTIONS.flat());
     expect(points.size).toBe(21);
   });

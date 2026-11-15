@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type MutableRefObject } from "react";
 import * as THREE from "three";
 import { Crosshair, Globe2, LocateFixed, Minus, Moon, Plus, Satellite } from "lucide-react";
 import { COLORS } from "../../config/theme";
-import { handSpread, type HandPose } from "../../engine/gestures";
+import { handZoomIntent, handsZoomIntent, type HandPose, type ZoomIntent } from "../../engine/gestures";
 import { latLonToVector, subsolarPoint } from "../../engine/sunPosition";
 import { mulberry32 } from "../../utils/prng";
 import { EARTH_PLACES, fetchLatestEpic, loadEarthTextures, type EarthPlace, type EarthTextures, type EpicImage } from "../../services/earthImagery";
@@ -40,6 +40,12 @@ const FIND_ROUNDS = 5;
 const ZOOM_MIN = 1.4;
 const ZOOM_MAX = 200;
 const clampZoom = (d: number) => Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, d));
+/** Hand zoom: hold a fist or an open hand this long before zooming starts. */
+const HAND_ZOOM_HOLD_MS = 250;
+/** Then zoom speeds up over this long, so a short hold makes a small step. */
+const HAND_ZOOM_RAMP_MS = 500;
+/** Full speed, in natural-log units of camera distance per second: Moon to Earth in about 4 s. */
+const HAND_ZOOM_RATE = 1.2;
 /** Real scale: the Moon is about 60 Earth radii away and 0.27 Earth radii across. */
 const MOON_DISTANCE = 60;
 const MOON_RADIUS = 0.273;
@@ -86,7 +92,7 @@ const CENTERED_DEG = 7;
 
 interface Props {
   poseRef: MutableRefObject<HandPose | null>;
-  /** All tracked hands; two pinching hands zoom and turn together. */
+  /** All tracked hands; two pinching hands turn together, fists and open hands zoom. */
   posesRef: MutableRefObject<HandPose[]>;
   onRound: (found: number, seconds: number) => void;
 }
@@ -262,48 +268,61 @@ export default function EarthView({ poseRef, posesRef, onRound }: Props) {
     let pinchFrom: { x: number; y: number } | null = null;
     let heldSince = 0;
     let lastLabel = 0;
-    let twoFrom: { mid: { x: number; y: number }; spread: number; dist: number } | null = null;
+    let twoFrom: { x: number; y: number } | null = null;
+    let zoomIntent: ZoomIntent = null;
+    let zoomSince = 0;
+    let lastHandFrame = performance.now();
     const tick = (now: number) => {
       // Keep the globe smooth enough to manipulate while avoiding a full
       // 60–120 Hz WebGL render loop. Hidden tabs and offscreen views do no work.
       raf = requestAnimationFrame(tick);
       if (document.visibilityState !== "visible" || !inViewport || now - lastFrame < frameInterval) return;
       lastFrame = now;
-      const both = posesRef.current;
-      const pose = poseRef.current;
-      if (both.length >= 2 && both[0]!.pinch && both[1]!.pinch) {
-        // Two pinching hands: pull apart to zoom in, move together to turn.
-        const [a, b] = both as [HandPose, HandPose];
+      const hands = posesRef.current.length ? posesRef.current : poseRef.current ? [poseRef.current] : [];
+      // A pinch turns the globe; a fist that also reads as a pinch is a fist (zoom), not a grab.
+      const grabbing = hands.filter((h) => h.pinch && handZoomIntent(h) !== "in");
+      if (grabbing.length >= 2) {
+        // Two pinching hands: move them together to turn.
+        const [a, b] = grabbing as [HandPose, HandPose];
         const mid = { x: (a.cursor.x + b.cursor.x) / 2, y: (a.cursor.y + b.cursor.y) / 2 };
-        const spread = Math.max(0.02, handSpread(a, b));
         v.spin = false;
         v.targetYaw = null;
         if (twoFrom) {
-          v.yaw += (mid.x - twoFrom.mid.x) * 5;
-          v.pitch = Math.max(-1.4, Math.min(1.4, v.pitch + (mid.y - twoFrom.mid.y) * 4));
-          v.dist = clampZoom(twoFrom.dist * (twoFrom.spread / spread) ** 2);
-          twoFrom = { ...twoFrom, mid };
-        } else twoFrom = { mid, spread, dist: v.dist };
-        pinchFrom = null;
-      } else if (pose) {
-        twoFrom = null;
-        if (pose.pinch) {
-          v.spin = false;
-          v.targetYaw = null;
-          if (pinchFrom) {
-            v.yaw += (pose.cursor.x - pinchFrom.x) * 5;
-            v.pitch = Math.max(-1.4, Math.min(1.4, v.pitch + (pose.cursor.y - pinchFrom.y) * 4));
-          }
-          pinchFrom = pose.cursor;
-        } else {
-          // An open or relaxed hand does nothing: only a pinch turns the globe, so resting
-          // a hand in view never moves it by accident. Zoom: two pinching hands, or + and −.
-          pinchFrom = null;
+          v.yaw += (mid.x - twoFrom.x) * 5;
+          v.pitch = Math.max(-1.4, Math.min(1.4, v.pitch + (mid.y - twoFrom.y) * 4));
         }
+        twoFrom = mid;
+        pinchFrom = null;
+      } else if (grabbing.length === 1) {
+        const p = grabbing[0]!;
+        twoFrom = null;
+        v.spin = false;
+        v.targetYaw = null;
+        if (pinchFrom) {
+          v.yaw += (p.cursor.x - pinchFrom.x) * 5;
+          v.pitch = Math.max(-1.4, Math.min(1.4, v.pitch + (p.cursor.y - pinchFrom.y) * 4));
+        }
+        pinchFrom = p.cursor;
       } else {
         twoFrom = null;
         pinchFrom = null;
       }
+      // Zoom by hand shape, on one hand or both: fist zooms in, open hand zooms out.
+      // The shape must be held briefly, so passing through it on the way to a pinch does nothing.
+      const zoom = handsZoomIntent(hands);
+      if (zoom !== zoomIntent) {
+        zoomIntent = zoom;
+        zoomSince = now;
+      }
+      const held = now - zoomSince - HAND_ZOOM_HOLD_MS;
+      if (zoomIntent && held > 0) {
+        v.spin = false;
+        v.targetDist = null;
+        const dt = Math.min(0.1, (now - lastHandFrame) / 1000);
+        const ramp = Math.min(1, held / HAND_ZOOM_RAMP_MS);
+        v.dist = clampZoom(v.dist * Math.exp((zoomIntent === "in" ? -1 : 1) * HAND_ZOOM_RATE * ramp * dt));
+      }
+      lastHandFrame = now;
       if (v.targetYaw !== null) {
         let dy = v.targetYaw - v.yaw;
         dy = Math.atan2(Math.sin(dy), Math.cos(dy));
@@ -461,7 +480,7 @@ export default function EarthView({ poseRef, posesRef, onRound }: Props) {
   return (
     <div className="grid h-full min-h-0 gap-3 overflow-y-auto overscroll-contain lg:grid-cols-[minmax(0,1fr)_300px] lg:grid-rows-[minmax(0,1fr)] lg:overflow-visible">
       <div className="relative min-h-[340px] overflow-hidden rounded-panel border border-line bg-space">
-        <div ref={mount} tabIndex={0} role="img" aria-label={`Earth globe. ${center} Drag, use arrow keys, or pinch with your hand to turn it. Plus and minus keys or the zoom buttons zoom out as far as the Moon; Home returns to Earth.`} className="absolute inset-0 outline-none focus-visible:ring-2 focus-visible:ring-tue" />
+        <div ref={mount} tabIndex={0} role="img" aria-label={`Earth globe. ${center} Drag, use arrow keys, or pinch with your hand to turn it. Hold a fist to zoom in and an open hand to zoom out. Plus and minus keys or the zoom buttons zoom out as far as the Moon; Home returns to Earth.`} className="absolute inset-0 outline-none focus-visible:ring-2 focus-visible:ring-tue" />
         <span ref={moonLabelRef} aria-hidden="true" className="pointer-events-none absolute left-0 top-0 whitespace-nowrap pl-3 text-xs font-semibold text-ink opacity-0">Moon · 384,400 km away (drawn larger)</span>
         <span ref={marsLabelRef} aria-hidden="true" className="pointer-events-none absolute left-0 top-0 whitespace-nowrap pl-3 text-xs font-semibold text-[#f08a5d] opacity-0">Mars (direction only, far beyond)</span>
         <span ref={pathLabelRef} aria-hidden="true" className="pointer-events-none absolute left-0 top-0 whitespace-nowrap pl-2 text-xs text-cyan opacity-0">Artemis II-style free-return loop (illustrative)</span>

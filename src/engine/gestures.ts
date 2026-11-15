@@ -94,7 +94,26 @@ export const HAND_CONNECTIONS: readonly (readonly [number, number])[] = [
   [0, 17],
 ];
 
-/** Distance between two hand cursors, in screen fractions. Used for two-hand zoom. */
-export function handSpread(a: HandPose, b: HandPose): number {
-  return Math.hypot(a.cursor.x - b.cursor.x, a.cursor.y - b.cursor.y);
+/** At or below this openness the hand is a fist: zoom in. */
+export const FIST_OPENNESS = 0.2;
+/** At or above this openness, all four fingers out and no pinch, the hand is open: zoom out. */
+export const OPEN_OPENNESS = 0.8;
+
+export type ZoomIntent = "in" | "out" | null;
+
+/**
+ * Earth zoom from the shape of the hand: a fist zooms in, an open hand zooms out,
+ * anything in between (a relaxed hand, a pinch) does nothing. A fist is checked first,
+ * because a closed hand can also read as a pinch.
+ */
+export function handZoomIntent(p: HandPose): ZoomIntent {
+  if (p.openness <= FIST_OPENNESS) return "in";
+  if (!p.pinch && p.extended >= 4 && p.openness >= OPEN_OPENNESS) return "out";
+  return null;
+}
+
+/** Zoom from every tracked hand. Hands that disagree (one fist, one open) cancel out. */
+export function handsZoomIntent(poses: readonly HandPose[]): ZoomIntent {
+  const wanted = new Set(poses.map(handZoomIntent).filter((z): z is "in" | "out" => z !== null));
+  return wanted.size === 1 ? [...wanted][0]! : null;
 }
