@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { parseVoiceCommand, type ParsedVoiceResult } from "../engine/voiceParser";
+import { parseVoiceCommand, type LastLoggedReading, type ParsedVoiceResult } from "../engine/voiceParser";
 import { describeHistory } from "../engine/voiceHistory";
 import { commsAnswer, loggedAnswer, readinessAnswer, readingAnswer, taskMentioned, tasksAnswer, timeAnswer, weatherAnswer } from "../engine/voiceAnswers";
 import { MISSION } from "../config/thresholds";
@@ -7,7 +7,7 @@ import { currentShipTime } from "../utils/dates";
 import { useSpaceWeather } from "./useSpaceWeather";
 import { statusSummary } from "../engine/tuesdayEngine";
 import { METRIC_GUIDANCE } from "../data/metricGuidance";
-import type { MetricId } from "../types/health";
+import type { MeasurementValue, MetricId, SymptomValue } from "../types/health";
 import { useMissionModel } from "./useMissionModel";
 import { useMissionStore } from "./useMissionState";
 import { useToast } from "./useToast";
@@ -17,6 +17,13 @@ import { transcribeLocalAudio } from "../services/localWhisper";
 import { openSpeechStream, unlockTuesdaySpeech } from "../services/voiceSynth";
 import { useTuesdaySpeech } from "./useTuesdaySpeech";
 import type { SpeechRecognition, SpeechRecognitionEvent, SpeechRecognitionErrorEvent } from "../types/speech";
+
+/** The microphone turns off after this long with nothing said (Tuesday speaking or thinking does not count). */
+const VOICE_IDLE_TIMEOUT_MS = 45_000;
+
+function isSymptomValue(v: MeasurementValue | undefined): v is SymptomValue {
+  return typeof v === "object" && "headache" in v;
+}
 
 export interface VoiceRecognitionState {
   isSupported: boolean;
@@ -100,6 +107,10 @@ export function useVoiceRecognition(options?: {
   const lastReplyRef = useRef("");
   /** The last indicator logged by voice, so "no, change it to 110" knows what "it" is. */
   const lastMetricRef = useRef<MetricId | undefined>(undefined);
+  const lastLoggedRef = useRef<LastLoggedReading | null>(null);
+  /** When the crew member last said something, for the idle timeout. */
+  const lastHeardRef = useRef(Date.now());
+  const stopListeningRef = useRef<() => void>(() => undefined);
   const dayRef = useRef(day);
   dayRef.current = day;
   const store = useMissionStore();
@@ -362,6 +373,7 @@ export function useVoiceRecognition(options?: {
   const executeCommand = useCallback(
     (text: string): ParsedVoiceResult => {
       unlockTuesdaySpeech();
+      lastHeardRef.current = Date.now();
       const metricCues = [
         /\b(?:heart\s*rate|pulse|bpm)\b/i,
         /\b(?:blood\s*pressure|\bbp\b)\b/i,
@@ -386,7 +398,10 @@ export function useVoiceRecognition(options?: {
         return routed;
       }
 
-      const parsed = parseVoiceCommand(text, dayRef.current, lastMetricRef.current);
+      const parsed = parseVoiceCommand(text, dayRef.current, lastMetricRef.current, lastLoggedRef.current ?? undefined);
+      // A correction ("no, it was 7") may only follow the reading logged on the turn just before.
+      const corrected = parsed.correction ? lastLoggedRef.current : null;
+      lastLoggedRef.current = null;
       setLastAction(parsed);
       // Remember what we're talking about, so "how do I measure it?" or "change it to 37" knows what "it" is.
       if (parsed.metricId && parsed.metricId !== "symptoms") lastMetricRef.current = parsed.metricId;
@@ -409,16 +424,22 @@ export function useVoiceRecognition(options?: {
       if (parsed.intent === "log_measurement" && parsed.metricId && parsed.value !== undefined) {
         const metricId = parsed.metricId;
         lastMetricRef.current = metricId;
+        // A correction replaces the reading it corrects instead of leaving the wrong one in place.
+        if (corrected && corrected.metricId === metricId && lastLoggedIdRef.current) store.deleteMeasurement(lastLoggedIdRef.current);
+        const missionDay = parsed.targetDay ?? dayRef.current;
         const res = store.logMeasurement({
           metricId,
           value: parsed.value,
-          missionDay: parsed.targetDay ?? dayRef.current,
+          missionDay,
           recordedAt: new Date().toISOString(),
           source: "tuesday",
           notes: "Voice telemetry via Tuesday AI",
         });
-        if (res.measurement) lastLoggedIdRef.current = res.measurement.id;
-        toast({ tone: res.persisted ? "success" : "warning", title: "Reading logged", body: `${parsed.displayText}. Saved on this device.` });
+        if (res.measurement) {
+          lastLoggedIdRef.current = res.measurement.id;
+          lastLoggedRef.current = { metricId, missionDay };
+        }
+        toast({ tone: res.persisted ? "success" : "warning", title: corrected ? "Reading corrected" : "Reading logged", body: `${parsed.displayText}. Saved on this device.` });
         replyAfterSave(() => {
           const today = (parsed.targetDay ?? missionRef.current.day) === missionRef.current.day;
           const note = res.persisted ? "" : " This browser isn't saving data, so it lasts for this session only.";
@@ -447,11 +468,24 @@ export function useVoiceRecognition(options?: {
         reply(describeHistory(m.days, m.day, parsed.metricId, parsed.days ?? 7, m.diagnostics[parsed.metricId].status));
       } else if (parsed.intent === "status_query") {
         reply(statusSummary(tuesdayRef.current.context));
-      } else if (parsed.intent === "symptom_report" && parsed.value !== undefined) {
+      } else if (parsed.intent === "symptom_report" && isSymptomValue(parsed.value)) {
+        // Add to the day's symptom check; never clear a symptom reported earlier that day.
+        const missionDay = parsed.targetDay ?? dayRef.current;
+        const earlierValue = missionRef.current.days.find((d) => d.missionDay === missionDay)?.readings.symptoms?.value;
+        const earlier = isSymptomValue(earlierValue) ? earlierValue : null;
+        const said = parsed.value;
+        const value: SymptomValue = earlier
+          ? {
+              headache: said.headache || earlier.headache,
+              blurredVision: said.blurredVision || earlier.blurredVision,
+              eyePressure: said.eyePressure || earlier.eyePressure,
+              otherSymptom: said.otherSymptom || earlier.otherSymptom,
+            }
+          : said;
         const res = store.logMeasurement({
           metricId: "symptoms",
-          value: parsed.value,
-          missionDay: parsed.targetDay ?? dayRef.current,
+          value,
+          missionDay,
           recordedAt: new Date().toISOString(),
           source: "tuesday",
           notes: "Voice telemetry via Tuesday AI",
@@ -495,9 +529,10 @@ export function useVoiceRecognition(options?: {
           lastLoggedIdRef.current = null;
           replyAfterSave(() => (res.ok ? "Removed that reading. The day uses the previous one again." : "That reading was already removed."));
         }
-      } else if (parsed.intent === "stop") {
-        tuesdayRef.current.stop();
-        stopTuesdaySpeech();
+      } else if (parsed.intent === "stop" || parsed.intent === "goodbye") {
+        // End the conversation: no more speech, microphone off. The reply is shown, not spoken.
+        stopListeningRef.current();
+        quietReply(parsed.intent === "goodbye" ? "Bye for now. The microphone is off; tap it when you need me." : "Stopped. The microphone is off; tap it when you need me.");
       } else if (parsed.intent === "repeat") {
         speakResponse(lastReplyRef.current || "I haven't said anything yet. Ask me how you're doing.");
       } else {
@@ -508,7 +543,7 @@ export function useVoiceRecognition(options?: {
 
       return parsed;
     },
-    [store, toast, speakResponse, stopTuesdaySpeech],
+    [store, toast, speakResponse],
   );
   processVoiceTranscriptRef.current = (text) => { executeCommand(text); };
   compoundCommandRef.current = (text) => {
@@ -683,6 +718,8 @@ export function useVoiceRecognition(options?: {
   }, [scheduleRecognitionRestart, startWhisperCapture, whisperStatus?.ready]);
 
   const stopListening = useCallback(() => {
+    // Also abort any answer still being written, so nothing is spoken after the conversation ends.
+    tuesdayRef.current.stop();
     shouldListenRef.current = false;
     setIsActive(false);
     speechPauseRef.current = false;
@@ -710,6 +747,28 @@ export function useVoiceRecognition(options?: {
     }
     whisperModeRef.current = false;
   }, [stopAudioWaveform, stopWhisperCapture, stopTuesdaySpeech]);
+
+  stopListeningRef.current = stopListening;
+
+  // Leaving Tuesday mode ends the conversation: microphone off, speech and any answer stopped.
+  useEffect(() => () => stopListeningRef.current(), []);
+
+  // No one has spoken for a while: turn the microphone off instead of listening forever.
+  useEffect(() => {
+    if (!isActive) return;
+    lastHeardRef.current = Date.now();
+    const timer = window.setInterval(() => {
+      if (!shouldListenRef.current) return;
+      if (speechGateRef.current || transcribingRef.current || tuesdayRef.current.busy) {
+        lastHeardRef.current = Date.now();
+        return;
+      }
+      if (Date.now() - lastHeardRef.current < VOICE_IDLE_TIMEOUT_MS) return;
+      stopListeningRef.current();
+      showReply(`Microphone off after ${VOICE_IDLE_TIMEOUT_MS / 1000} seconds of quiet. Tap it to talk again.`);
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [isActive, showReply]);
 
   const toggleListening = useCallback(() => {
     if (speechGateRef.current) {

@@ -5291,18 +5291,9 @@ var AstraCoreBundle = (function(exports) {
 		}
 		return out.toSorted((x, y) => x.daysToLimit - y.daysToLimit);
 	}
-	// src/engine/tuesdayEngine.ts
-	/**
-	* Tuesday, the crew companion: intent detection, the on-device health brief
-	* sent to a local model, the safety filter applied to every model answer, and
-	* the offline replies used when no model is running. Pure functions.
-	*
-	* Tuesday follows the same medical language rules as the rest of ASTRA-MED:
-	* no diagnosis, no medication, no change to exercise or treatment.
-	*/
 	var PATTERNS = [
 		["crisis", /\b(kill myself|suicid|self[- ]?harm|hurt myself|end it all|want to die|no reason to live)\b/i],
-		["urgent", /\b(chest (pain|pressure|tight)|can'?t breathe|short(ness)? of breath|struggling to breathe|faint(ed|ing)?|pass(ed|ing) out|black(ed)? out|severe headache|worst headache|vision (loss|went|is going)|lost (my )?vision|numb(ness)?|slurred|seizure|bleeding (a lot|heavily|won'?t stop)|heart (is )?(racing|pounding)|palpitation)/i],
+		["urgent", /\b(chest (pain|pressure|tight)|can'?t breathe|short(ness)? of breath|struggling to breathe|cannot breathe|faint(ed|ing)?|pass(ed|ing) out|black(ed)? out|severe headache|worst headache|vision (loss|went|is going)|lost (my )?vision|numb(ness)?|slurred|seizure|bleeding (a lot|heavily|won'?t stop)|heart (is )?(racing|pounding)|palpitation)/i],
 		["checkin", /\b(check[- ]?in|log (my )?mood|rate my mood)\b/i],
 		["symptom", /\b(heart ?rate|pulse|bpm|blood pressure|temperature|fever|glucose|blood sugar|dizzy|nause|headache|pain|hurts?|sick|unwell|ill|rash|wound|swelling|eye|vision)\b/i],
 		["earth", /\b(earth|home planet|window|globe|see home|blue marble)\b/i],

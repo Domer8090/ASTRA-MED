@@ -193,7 +193,9 @@ export function TuesdayProvider({ children }: { children: ReactNode }) {
       // Dangerous numbers and red-flag symptoms get a fixed answer, never a model's.
       const vitalsReply = attachment ? null : reportedVitalsReply(readingsInText(question));
       if (vitalsReply || intent === "urgent") {
-        const reply = vitalsReply ?? { text: URGENT_REPLY, actions: actionsFor("urgent", context) };
+        const safety = vitalsReply ?? { text: URGENT_REPLY, actions: actionsFor("urgent", context) };
+        // A reading just logged by voice keeps its save confirmation (and any "not saving" warning) first.
+        const reply = consoleResult ? { ...safety, text: `${consoleResult}\n\n${safety.text}` } : safety;
         store.addMessage({ role: "tuesday", text: reply.text, via: "core", actions: reply.actions });
         if (voice) say(reply.text);
         return;

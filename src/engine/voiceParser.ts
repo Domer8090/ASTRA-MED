@@ -6,6 +6,7 @@
 import { BLOOD_PRESSURE } from "../config/thresholds";
 import type { MeasurementValue, MetricId } from "../types/health";
 import { entrySpec } from "../utils/validation";
+import { CRISIS_PATTERN, URGENT_PATTERN } from "./tuesdayEngine";
 
 export type VoiceIntent =
   | "log_measurement"
@@ -30,6 +31,7 @@ export type VoiceIntent =
   | "urgent"
   | "undo"
   | "stop"
+  | "goodbye"
   | "repeat"
   | "thanks"
   | "unknown";
@@ -47,12 +49,20 @@ export interface ParsedVoiceResult {
   confidence: number;
   rawText: string;
   warning?: string;
+  /** True when this reading replaces the one logged on the previous turn. */
+  correction?: boolean;
+}
+
+/** The reading Tuesday logged by voice on the previous turn, which a correction may replace. */
+export interface LastLoggedReading {
+  metricId: MetricId;
+  missionDay: number;
 }
 
 /**
  * Parses spoken text into an actionable medical command or Tuesday response.
  */
-export function parseVoiceCommand(raw: string, currentDay: number, lastMetric?: MetricId): ParsedVoiceResult {
+export function parseVoiceCommand(raw: string, currentDay: number, lastMetric?: MetricId, lastLogged?: LastLoggedReading): ParsedVoiceResult {
   const text = normaliseSpeech(raw);
 
   // Determine target mission day (e.g. "yesterday my heart rate was 215", "for day 62")
@@ -85,10 +95,16 @@ export function parseVoiceCommand(raw: string, currentDay: number, lastMetric?: 
   });
 
   // Emergencies and crisis words always go to Tuesday's fixed safety replies first.
-  if (URGENT_WORDS.test(clean)) return ask("urgent", "Urgent symptom: safety reply");
+  // Same patterns as Tuesday's detectIntent, so the parser can never miss one Tuesday knows.
+  if (CRISIS_PATTERN.test(clean) || URGENT_PATTERN.test(clean)) return ask("urgent", "Urgent symptom: safety reply");
 
-  // Control words.
-  if (/^(?:please\s+)?(?:stop|quiet|be quiet|shut up|silence|never ?mind|cancel|enough|that'?s enough)[.!]?$/i.test(clean)) return ask("stop", "Stopped speaking");
+  // A named reading with a number is a reading to log, not a question, even when it also says
+  // "mission day 62" or "has been". Day references and "last N days" are not reading numbers.
+  const carriesReading = Boolean(metricNamed(clean)) && /\d/.test(clean.replace(/\b(?:last|past|previous)\s+\d{1,3}\s+days?\b/gi, "").replace(/\b(?:for|on|mission)?\s*day\s*\d{1,3}\b/gi, ""));
+
+  // Control words. "Stop" and goodbyes end the conversation: speech stops and the microphone turns off.
+  if (GOODBYE.test(clean)) return ask("goodbye", "Conversation ended");
+  if (/^(?:please\s+)?(?:stop(?:\s+(?:talking|speaking|it|now|please))?|quiet|be quiet|shut up|silence|never ?mind|cancel|enough|that'?s enough)[.!]?$/i.test(clean)) return ask("stop", "Stopped");
   if (/\b(repeat that|say (?:that|it) again|what did you (?:just )?say|come again|pardon|didn'?t (?:catch|hear) (?:that|you))\b/i.test(clean)) return ask("repeat", "Repeat last reply");
   if (/\b(undo|scratch that|delete (?:that|the last|my last)|remove (?:that|the last|my last)|that was (?:wrong|a mistake)|wrong (?:reading|number))\b/i.test(clean)) return ask("undo", "Undo last reading");
 
@@ -97,6 +113,7 @@ export function parseVoiceCommand(raw: string, currentDay: number, lastMetric?: 
   const historyMetric = metricNamed(clean);
   const historyDays = clean.match(/\b(?:last|past|previous)\s+(\d{1,3})\s+days?\b/i);
   const asksHistory =
+    !carriesReading &&
     historyMetric &&
     (historyDays ||
       /\b(last|past|previous)\s+(week|fortnight|month)\b/i.test(clean) ||
@@ -119,11 +136,13 @@ export function parseVoiceCommand(raw: string, currentDay: number, lastMetric?: 
     return { intent: "medical_officer", displayText: "Contact the medical officer", speechResponse: "Opening the message to the medical officer.", confidence: 0.95, rawText: raw };
   }
 
-  // Space weather, comms, time and score questions.
-  if (/\b(space weather|solar (?:storm|flare|wind|activity|event)|flares?|cme|radiation (?:storm|alert|warning|risk|event)|is it safe|shelter|proton|geomagnetic)\b/i.test(clean)) return ask("weather_query", "Space weather");
-  if (/\b(communication|comms|signal|ground link|mission control|houston|talk to (?:the )?(?:ground|earth|doctor|surgeon)|delay|link (?:up|down)|contact with earth)\b/i.test(clean) && !/\b(contact|call|message)\s+(?:the\s+)?medical officer\b/i.test(clean)) return ask("comms_query", "Ground link and delay");
-  if (/\b(what day|which day|mission day|what time|ship time|days (?:are )?(?:left|remaining|to go)|how many days|how long (?:have we|until|is left))\b/i.test(clean)) return ask("time_query", "Mission day and time");
-  if (/\b(readiness|plan score|my score|streak|xp|points)\b/i.test(clean)) return ask("readiness_query", "Plan score");
+  // Space weather, comms, time and score questions. Skipped when the sentence carries a reading.
+  if (carriesReading) {
+    // Fall through to the logging rules.
+  } else if (/\b(space weather|solar (?:storm|flare|wind|activity|event)|flares?|cme|radiation (?:storm|alert|warning|risk|event)|is it safe|shelter|proton|geomagnetic)\b/i.test(clean)) return ask("weather_query", "Space weather");
+  else if (/\b(communication|comms|signal|ground link|mission control|houston|talk to (?:the )?(?:ground|earth|doctor|surgeon)|delay|link (?:up|down)|contact with earth)\b/i.test(clean) && !/\b(contact|call|message)\s+(?:the\s+)?medical officer\b/i.test(clean)) return ask("comms_query", "Ground link and delay");
+  else if (/\b(what day|which day|mission day|what time|ship time|days (?:are )?(?:left|remaining|to go)|how many days|how long (?:have we|until|is left))\b/i.test(clean)) return ask("time_query", "Mission day and time");
+  else if (/\b(readiness|plan score|my score|streak|xp|points)\b/i.test(clean)) return ask("readiness_query", "Plan score");
   if (/\b(tasks?|checklist|to-?do|what(?:'s| is) next|what should i do(?: today| now| next)?|what do i (?:need|have) to do|left to do|remaining today)\b/i.test(clean) && !metricNamed(clean) && !/\b(headache|dizzy|sick|pain|unwell|nause\w*|hurt)/i.test(clean)) return ask("tasks_query", "Today's tasks");
 
   // "How can I measure it?" -> the steps for the named reading, or the one we were just talking about.
@@ -152,13 +171,21 @@ export function parseVoiceCommand(raw: string, currentDay: number, lastMetric?: 
   }
 
   // Symptoms ("I have a headache") are logged as a symptom check, not left unanswered.
+  // Only a plain statement is logged: not a question, a denial ("I'm not sick") or a figure of
+  // speech ("sick of this food"). Those go to conversation.
+  const symptomText = clean.replace(/\b(?:not|n'?t)\s+feeling\s+(?:well|good|great)\b/gi, "feeling unwell");
+  const statesSymptom =
+    !isQuestion(raw, clean) &&
+    !SYMPTOM_DENIED.test(symptomText.replace(/^(?:no|nope|okay|ok|well)\b[,.!]?\s*/i, "")) &&
+    !/\bsick\s+(?:of|and\s+tired)\b/i.test(clean) &&
+    /\b(?:i|i'?m|i\s+am|i'?ve|i\s+have|my|feel(?:ing)?|got|getting|bit\s+of)\b/i.test(clean);
   const symptoms = {
-    headache: /\b(headache|head\s+(?:hurts|aches|pain))\b/i.test(clean),
-    blurredVision: /\b(blurr?(?:ed|y)?\s+vision|vision\s+is\s+blurr?(?:ed|y)|can'?t\s+see\s+(?:clearly|well))\b/i.test(clean),
-    eyePressure: /\b(eye\s+pressure|pressure\s+(?:in|behind)\s+(?:my\s+)?eyes?)\b/i.test(clean),
-    otherSymptom: /\b(dizzy|dizziness|nause\w*|sick|unwell|not\s+feeling\s+well|vomit\w*)\b/i.test(clean),
+    headache: /\b(headache|head\s+(?:hurts|aches|pain))\b/i.test(symptomText),
+    blurredVision: /\b(blurr?(?:ed|y)?\s+vision|vision\s+is\s+blurr?(?:ed|y))\b/i.test(symptomText),
+    eyePressure: /\b(eye\s+pressure|pressure\s+(?:in|behind)\s+(?:my\s+)?eyes?)\b/i.test(symptomText),
+    otherSymptom: /\b(dizzy|dizziness|nause\w*|sick|unwell|vomit\w*)\b/i.test(symptomText),
   };
-  if ((symptoms.headache || symptoms.blurredVision || symptoms.eyePressure || symptoms.otherSymptom) && !/\d/.test(clean)) {
+  if (statesSymptom && (symptoms.headache || symptoms.blurredVision || symptoms.eyePressure || symptoms.otherSymptom) && !/\d/.test(clean)) {
     const named = [symptoms.headache && "a headache", symptoms.blurredVision && "blurred vision", symptoms.eyePressure && "eye pressure", symptoms.otherSymptom && "feeling unwell"].filter(Boolean).join(" and ");
     return {
       intent: "symptom_report",
@@ -172,14 +199,19 @@ export function parseVoiceCommand(raw: string, currentDay: number, lastMetric?: 
     };
   }
 
-  // A correction with no reading named ("no, change it to 110") applies to the last reading logged.
-  // Also "okay, can you put it as 36.9", "log 72", "make that 110".
+  // A correction with no reading named ("no, change it to 110", "it was 7", "put it as 36.9")
+  // replaces the reading logged by voice on the previous turn, on that reading's day.
+  // Only right after a voice log, so "set a timer for 10 minutes" later never writes a reading.
+  const num = "(\\d+(?:\\.\\d+)?(?:\\s*(?:over|\\/)\\s*\\d+)?)";
+  const lead = "^(?:(?:no|nope|okay|ok|yes|yeah|actually|sorry|wait|oops)[,.!]?\\s*)*(?:(?:can|could|would)\\s+you\\s+|please\\s+)*";
   const correction =
-    clean.match(/^(?:no[,.!]?\s*)?(?:(?:please\s+)?(?:change|make|set|correct|update|fix)\s+(?:it|that)\s+(?:to\s+)?|it'?s\s+|it\s+was\s+|i\s+said\s+)(\d+(?:\.\d+)?(?:\s*(?:over|\/)\s*\d+)?)\b/i) ??
-    clean.match(/^(?:(?:no|okay|ok|yes|yeah|actually|sorry|wait)[,.!]?\s*)*(?:(?:can|could|would)\s+you\s+|please\s+)*(?:put|log|record|enter|save|use|measure|set|make|change|correct|update|fix)\b[^\d]{0,24}?(\d+(?:\.\d+)?(?:\s*(?:over|\/)\s*\d+)?)\b/i);
-  const lastWord = lastMetric ? METRIC_WORD[lastMetric] : undefined;
-  if (correction?.[1] && lastWord && !metricNamed(clean)) {
-    return { ...parseVoiceCommand(`${lastWord} ${correction[1]}`, currentDay), rawText: raw };
+    clean.match(new RegExp(`${lead}(?:(?:change|make|set|correct|update|fix|put|log|record|enter|save)\\s+(?:it|that|this)\\s+(?:down\\s+)?(?:as\\s+|to\\s+|at\\s+)?|(?:put|use|measure|log|record|enter|save|set|make|change)\\s+(?:it\\s+|that\\s+|this\\s+)?(?:down\\s+)?as\\s+|(?:log|record|enter|save)\\s+|it'?s\\s+|it\\s+(?:is|was)\\s+|i\\s+said\\s+|i\\s+meant\\s+)${num}\\b`, "i"));
+  const lastWord = lastLogged ? METRIC_WORD[lastLogged.metricId] : undefined;
+  if (correction?.[1] && lastLogged && lastWord && !metricNamed(clean)) {
+    const day = targetDay !== currentDay ? targetDay : lastLogged.missionDay;
+    const unit = lastLogged.metricId === "hydration" ? " liters" : "";
+    const dayText = day !== currentDay ? ` for day ${day}` : "";
+    return { ...parseVoiceCommand(`${lastWord} ${correction[1]}${unit}${dayText}`, currentDay), rawText: raw, correction: true };
   }
 
   // 1. Commands that open or close Tuesday mode
@@ -515,8 +547,12 @@ export function parseVoiceCommand(raw: string, currentDay: number, lastMetric?: 
     };
   }
 
-  // "I finished my workout", "mark hydration done"
-  if (/\b(done|finished|completed|complete|did|mark)\b/i.test(clean) && !/\d/.test(clean)) {
+  // "I finished my workout", "mark hydration done". Needs a completion statement: questions
+  // ("did I drink enough water?"), denials ("I did not do my workout") and "I'm done for now" go on.
+  const statesDone =
+    /\b(?:i|we)(?:'ve|\s+have)?\s+(?:just\s+|already\s+)?(?:done|did|finished|completed)\s+(?:my|the|our|it|today'?s|\w+ing|ared|workout|hydration|exercise)\b/i.test(clean) ||
+    /\b(?:mark|tick|check)\b.*\b(?:done|complete|completed|finished|off)\b/i.test(clean);
+  if (statesDone && !isQuestion(raw, clean) && !/\b(?:not|never|yet|skip(?:ped)?|missed)\b|n'?t\b/i.test(clean) && !/\d/.test(clean)) {
     return ask("task_done", "Mark a task done");
   }
 
@@ -561,34 +597,66 @@ const UNITS: Record<string, number> = {
 };
 const TENS: Record<string, number> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
 
-/** "one hundred and ten" -> "110", "nine and a half" -> "9.5", "seven point five" -> "7.5". */
+/**
+ * "one hundred and ten" -> "110", "nine and a half" -> "9.5", "seven point five" -> "7.5".
+ * Spoken compounds read as people say them: "one thirty" -> "130", "one twenty five" -> "125",
+ * "one forty over ninety" -> "140 over 90". The article "a" is a number only before "hundred".
+ * Number words that do not form one number stay separate ("seven eight" -> "7 8"), never summed.
+ */
 export function wordsToDigits(text: string): string {
   const word = "(?:" + [...Object.keys(UNITS), ...Object.keys(TENS), "hundred", "a"].join("|") + ")";
   const run = new RegExp(`\\b${word}(?:[\\s-]+(?:and\\s+)?${word})*\\b`, "gi");
   let out = text.replace(/\s+and\s+a\s+half\b/gi, " point five").replace(run, (m) => {
-    const parts = m.toLowerCase().split(/[\s-]+/).filter((w) => w !== "and");
-    if (parts.length === 1 && parts[0] === "a") return m;
-    let total = 0;
-    let current = 0;
-    let any = false;
-    for (const p of parts) {
-      if (p === "a") {
-        current = current || 1;
+    const tokens = m.toLowerCase().split(/[\s-]+/);
+    const pieces: string[] = [];
+    let i = 0;
+    const unit = (t?: string) => (t !== undefined && t in UNITS ? UNITS[t]! : undefined);
+    const tens = (t?: string) => (t !== undefined && t in TENS ? TENS[t]! : undefined);
+    /** 0-99 from tokens[at]: a tens word with an optional 1-9, or a 0-19 word. */
+    const belowHundred = (at: number): { value: number; next: number } | null => {
+      const t = tens(tokens[at]);
+      if (t !== undefined) {
+        const u = unit(tokens[at + 1]);
+        return u !== undefined && u >= 1 && u <= 9 ? { value: t + u, next: at + 2 } : { value: t, next: at + 1 };
+      }
+      const u = unit(tokens[at]);
+      return u !== undefined ? { value: u, next: at + 1 } : null;
+    };
+    while (i < tokens.length) {
+      const tok = tokens[i]!;
+      const u = unit(tok);
+      // "a hundred", "two hundred and ten"
+      if ((tok === "a" || (u !== undefined && u >= 1 && u <= 9)) && tokens[i + 1] === "hundred") {
+        let value = (tok === "a" ? 1 : u!) * 100;
+        let next = i + 2;
+        const rest = belowHundred(tokens[next] === "and" ? next + 1 : next);
+        if (rest) ({ value, next } = { value: value + rest.value, next: rest.next });
+        pieces.push(String(value));
+        i = next;
         continue;
       }
-      if (p in UNITS) {
-        current += UNITS[p]!;
-        any = true;
-      } else if (p in TENS) {
-        current += TENS[p]!;
-        any = true;
-      } else if (p === "hundred") {
-        current = (current || 1) * 100;
-        any = true;
+      // "one thirty" -> 130, "one twenty five" -> 125, "one fifteen" -> 115
+      if (u !== undefined && u >= 1 && u <= 9) {
+        const nextTok = tokens[i + 1];
+        const pair = tens(nextTok) !== undefined || (unit(nextTok) ?? 0) >= 10;
+        const rest = pair ? belowHundred(i + 1) : null;
+        if (rest) {
+          pieces.push(String(u * 100 + rest.value));
+          i = rest.next;
+          continue;
+        }
       }
+      const below = belowHundred(i);
+      if (below) {
+        pieces.push(String(below.value));
+        i = below.next;
+        continue;
+      }
+      pieces.push(tok); // "a", "and", or a lone "hundred"
+      i += 1;
     }
-    total += current;
-    return any ? String(total) : m;
+    const joined = pieces.join(" ");
+    return joined === m.toLowerCase() ? m : joined;
   });
   out = out.replace(/\b(\d+)\s+point\s+(\d+)\b/gi, "$1.$2");
   out = out.replace(/\b(\d+)\s+and\s+a\s+half\b/gi, (_m, n: string) => `${n}.5`);
@@ -615,7 +683,7 @@ const METRIC_WORD: Partial<Record<MetricId, string>> & Record<"heartRate", strin
   mood: "mood",
   aredMinutes: "workout",
   radiation: "dose",
-  hydration: "drank",
+  hydration: "water",
 };
 
 /** The indicator a sentence talks about, if any. */
@@ -634,6 +702,15 @@ export function metricNamed(text: string): MetricId | undefined {
   return pairs.find(([, re]) => re.test(text))?.[0];
 }
 
-/** Emergency and crisis words. These always get Tuesday's fixed safety reply. */
-const URGENT_WORDS =
-  /\b(chest (?:pain|pressure|tight\w*)|can'?t breathe|cannot breathe|short(?:ness)? of breath|struggling to breathe|faint(?:ed|ing)?|pass(?:ed|ing) out|black(?:ed)? out|severe headache|worst headache|vision (?:loss|went|is going)|lost (?:my )?vision|numb(?:ness)?|slurred|seizure|bleeding (?:a lot|heavily|won'?t stop)|heart (?:is )?(?:racing|pounding)|palpitations?|kill myself|suicid\w*|self[- ]?harm|hurt myself|end it all|want to die)\b/i;
+/** Ways of ending the conversation. The whole sentence must be the goodbye, so "I'm done with my workout" is not one. */
+const GOODBYE =
+  /^(?:(?:ok(?:ay)?|alright|all right|thanks?|thank you|cool|great|perfect|good|no|nope)[,.!]?\s*)*(?:tuesday[,.!]?\s*)?(?:bye(?:\s+bye)?|goodbye|good ?night|see you(?: later| soon)?|talk (?:to you )?(?:later|soon)|that'?s (?:all|it|everything)(?: for (?:now|today))?|that(?:'?ll| will) be all|i'?m (?:all )?(?:done|finished|good)(?: for (?:now|today)| talking| here)?|i am (?:done|finished)(?: for now| talking)?|we'?re (?:done|finished)(?: here| for now)?|nothing else|no more(?: questions)?|stop listening|you can stop(?: listening| now)?|end (?:the )?(?:conversation|chat|session)|go to sleep|over and out|sign(?:ing)? off|later)(?:[,.!]?\s*(?:tuesday|thanks?|thank you|for now|bye|goodbye))*[.!]?$/i;
+
+/** A denial right before a symptom word: "I'm not dizzy", "I don't feel sick", "no headache". */
+const SYMPTOM_DENIED =
+  /(?:\b(?:not|no|never|without|nor)\b|n'?t\b)(?:\s+[\w']+){0,3}?\s+(?:a\s+)?(?:headache|head|blurr?\w*|vision|eye|pressure|dizz\w*|nause\w*|sick|unwell|vomit\w*)\b/i;
+
+/** A question rather than a statement. */
+function isQuestion(raw: string, clean: string): boolean {
+  return /\?\s*$/.test(raw.trim()) || /^(?:what|whats|what'?s|did|do|does|how|are|is|was|were|have|has|can|could|should|would|will|when|why|where|who|am|if)\b/i.test(clean);
+}

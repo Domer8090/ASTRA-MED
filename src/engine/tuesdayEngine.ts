@@ -44,9 +44,14 @@ export type TuesdayAction =
   | { kind: "contact"; priority: "urgent" | "routine" }
   | { kind: "report" };
 
+/** Crisis words. Shared with the voice parser so both always agree. */
+export const CRISIS_PATTERN = /\b(kill myself|suicid|self[- ]?harm|hurt myself|end it all|want to die|no reason to live)\b/i;
+/** Red-flag symptoms that get the fixed urgent reply. Shared with the voice parser. */
+export const URGENT_PATTERN = /\b(chest (pain|pressure|tight)|can'?t breathe|short(ness)? of breath|struggling to breathe|cannot breathe|faint(ed|ing)?|pass(ed|ing) out|black(ed)? out|severe headache|worst headache|vision (loss|went|is going)|lost (my )?vision|numb(ness)?|slurred|seizure|bleeding (a lot|heavily|won'?t stop)|heart (is )?(racing|pounding)|palpitation)/i;
+
 const PATTERNS: [TuesdayIntent, RegExp][] = [
-  ["crisis", /\b(kill myself|suicid|self[- ]?harm|hurt myself|end it all|want to die|no reason to live)\b/i],
-  ["urgent", /\b(chest (pain|pressure|tight)|can'?t breathe|short(ness)? of breath|struggling to breathe|faint(ed|ing)?|pass(ed|ing) out|black(ed)? out|severe headache|worst headache|vision (loss|went|is going)|lost (my )?vision|numb(ness)?|slurred|seizure|bleeding (a lot|heavily|won'?t stop)|heart (is )?(racing|pounding)|palpitation)/i],
+  ["crisis", CRISIS_PATTERN],
+  ["urgent", URGENT_PATTERN],
   ["checkin", /\b(check[- ]?in|log (my )?mood|rate my mood)\b/i],
   // Health comes before boredom or games: "bored, and my heart rate is up" is a health question.
   ["symptom", /\b(heart ?rate|pulse|bpm|blood pressure|temperature|fever|glucose|blood sugar|dizzy|nause|headache|pain|hurts?|sick|unwell|ill|rash|wound|swelling|eye|vision)\b/i],

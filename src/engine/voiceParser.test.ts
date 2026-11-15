@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseVoiceCommand } from "./voiceParser";
+import { parseVoiceCommand, wordsToDigits } from "./voiceParser";
 
 describe("voiceParser", () => {
   it("opens the Earth view for everyday phrasings", () => {
@@ -103,7 +103,7 @@ describe("voiceParser", () => {
   });
 
   it("applies a bare correction to the last logged reading", () => {
-    const r = parseVoiceCommand("No, change it to 110.", 42, "heartRate");
+    const r = parseVoiceCommand("No, change it to 110.", 42, "heartRate", { metricId: "heartRate", missionDay: 42 });
     expect(r.intent).toBe("log_measurement");
     expect(r.metricId).toBe("heartRate");
     expect(r.value).toBe(110);
@@ -152,8 +152,73 @@ describe("voiceParser", () => {
   });
   it("logs a number said before the reading, and follow-ups that put a number on the last reading", () => {
     expect(parseVoiceCommand("No, put 36.9 as my Fahrenheit or my body temperature.", 42)).toMatchObject({ intent: "log_measurement", metricId: "bodyTemperature", value: 36.9 });
-    expect(parseVoiceCommand("Okay, can you measure as 36.9?", 42, "bodyTemperature")).toMatchObject({ intent: "log_measurement", metricId: "bodyTemperature", value: 36.9 });
-    expect(parseVoiceCommand("Can you put it as 72?", 42, "heartRate")).toMatchObject({ intent: "log_measurement", metricId: "heartRate", value: 72 });
+    expect(parseVoiceCommand("Okay, can you measure as 36.9?", 42, "bodyTemperature", { metricId: "bodyTemperature", missionDay: 42 })).toMatchObject({ intent: "log_measurement", metricId: "bodyTemperature", value: 36.9 });
+    expect(parseVoiceCommand("Can you put it as 72?", 42, "heartRate", { metricId: "heartRate", missionDay: 42 })).toMatchObject({ intent: "log_measurement", metricId: "heartRate", value: 72 });
     expect(parseVoiceCommand("Can you put my temperature as 46 Celsius?", 42).value).toBeUndefined();
+  });
+
+  describe("review fixes", () => {
+    const last = { metricId: "heartRate" as const, missionDay: 42 };
+
+    it("gives every crisis phrase Tuesday knows the safety reply, before repeat or Recharge", () => {
+      expect(parseVoiceCommand("Pardon, there's no reason to live", 42).intent).toBe("urgent");
+      expect(parseVoiceCommand("There's no reason to live, show me the earth", 42).intent).toBe("urgent");
+      expect(parseVoiceCommand("I cannot breathe", 42).intent).toBe("urgent");
+    });
+
+    it("reads spoken compounds the way people say them", () => {
+      expect(wordsToDigits("heart rate one thirty")).toBe("heart rate 130");
+      expect(wordsToDigits("glucose one twenty five")).toBe("glucose 125");
+      expect(wordsToDigits("blood pressure one forty over ninety")).toBe("blood pressure 140 over 90");
+      expect(wordsToDigits("i did a thirty minute workout")).toBe("i did a 30 minute workout");
+      expect(wordsToDigits("a hundred and ten")).toBe("110");
+      expect(wordsToDigits("seventy two")).toBe("72");
+      expect(wordsToDigits("seven eight")).toBe("7 8");
+      expect(parseVoiceCommand("heart rate one thirty", 42).value).toBe(130);
+      expect(parseVoiceCommand("blood pressure one forty over ninety", 42).value).toEqual({ systolic: 140, diastolic: 90 });
+    });
+
+    it("never marks a task done from a denial, a question or small talk", () => {
+      for (const q of ["I did not do my workout today", "I haven't finished my workout", "Did I drink enough water?", "What did the medical officer say?", "How did you sleep, Tuesday?", "Are we done?", "I'm done for now"]) {
+        expect(parseVoiceCommand(q, 42).intent, q).not.toBe("task_done");
+      }
+      expect(parseVoiceCommand("I finished my workout", 42).intent).toBe("task_done");
+      expect(parseVoiceCommand("mark hydration done", 42).intent).toBe("task_done");
+    });
+
+    it("applies a correction only right after a voice log, on that reading's day", () => {
+      expect(parseVoiceCommand("Set a timer for 10 minutes", 42, "aredMinutes").intent).not.toBe("log_measurement");
+      expect(parseVoiceCommand("It was 2 days ago", 42, "sleep").intent).not.toBe("log_measurement");
+      expect(parseVoiceCommand("Set a timer for 10 minutes", 42, "aredMinutes", { metricId: "aredMinutes", missionDay: 42 }).intent).not.toBe("log_measurement");
+      const fix = parseVoiceCommand("No, it was 7", 42, "sleep", { metricId: "sleep", missionDay: 41 });
+      expect(fix).toMatchObject({ intent: "log_measurement", metricId: "sleep", value: 7, targetDay: 41, correction: true });
+      expect(parseVoiceCommand("No, it was 7 yesterday", 42, "sleep", { metricId: "sleep", missionDay: 42 })).toMatchObject({ value: 7, targetDay: 41 });
+      expect(parseVoiceCommand("No, change it to 110", 42, "heartRate", last)).toMatchObject({ value: 110, targetDay: 42 });
+    });
+
+    it("logs symptoms only from a plain statement", () => {
+      for (const q of ["I'm sick of this food", "I'm not sick", "I don't feel nauseous", "Is a headache normal up here?"]) {
+        expect(parseVoiceCommand(q, 42).intent, q).not.toBe("symptom_report");
+      }
+      expect(parseVoiceCommand("I feel dizzy", 42).intent).toBe("symptom_report");
+      expect(parseVoiceCommand("I'm not feeling well", 42).value).toMatchObject({ otherSymptom: true });
+    });
+
+    it("logs a reading that also names a day or says 'has been'", () => {
+      expect(parseVoiceCommand("Heart rate 64 for mission day 62", 42)).toMatchObject({ intent: "log_measurement", value: 64, targetDay: 62 });
+      expect(parseVoiceCommand("My pulse has been 72 this morning", 42)).toMatchObject({ intent: "log_measurement", value: 72 });
+      expect(parseVoiceCommand("What has my heart rate been over the last 14 days?", 42)).toMatchObject({ intent: "history_query", days: 14 });
+      expect(parseVoiceCommand("what mission day is it", 42).intent).toBe("time_query");
+    });
+  });
+
+  it("ends the conversation on a goodbye or stop, but not on a sentence that only contains one", () => {
+    for (const q of ["Bye", "Okay, thanks Tuesday, that's all", "I'm done for now", "That's it for today", "Goodbye Tuesday", "Stop listening", "We're done here", "Good night"]) {
+      expect(parseVoiceCommand(q, 42).intent, q).toBe("goodbye");
+    }
+    for (const q of ["Stop", "Stop talking", "Be quiet"]) expect(parseVoiceCommand(q, 42).intent, q).toBe("stop");
+    for (const q of ["I'm done with my workout", "I finished my workout", "Is that all my readings?"]) {
+      expect(parseVoiceCommand(q, 42).intent, q).not.toBe("goodbye");
+    }
   });
 });
